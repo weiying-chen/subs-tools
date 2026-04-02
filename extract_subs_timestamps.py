@@ -14,9 +14,12 @@ NS = {"w": W_NS}
 HIGHLIGHTED_LINE_RE = re.compile(
     r"^(\d{2}:\d{2}:\d{2}:\d{2})(\d{2}:\d{2}:\d{2}:\d{2})(.+)$"
 )
-# Some files keep subtitle rows as full lines in plain paragraph text.
-PARAGRAPH_LINE_RE = re.compile(
-    r"^(\d{2}:\d{2}:\d{2}:\d{2})\t(\d{2}:\d{2}:\d{2}:\d{2})\t(.+)$"
+# Some files keep subtitle rows as full lines in paragraph text.
+PARAGRAPH_TAB_LINE_RE = re.compile(
+    r"^(\d{2}:\d{2}:\d{2}:\d{2})\t+(\d{2}:\d{2}:\d{2}:\d{2})\t+(.+)$"
+)
+PARAGRAPH_COMPACT_LINE_RE = re.compile(
+    r"^(\d{2}:\d{2}:\d{2}:\d{2})(\d{2}:\d{2}:\d{2}:\d{2})(.+)$"
 )
 HAS_CHINESE_RE = re.compile(r"[\u4e00-\u9fff]")
 
@@ -25,6 +28,16 @@ def load_docx_root(docx_path: Path) -> ET.Element:
     with zipfile.ZipFile(docx_path) as zf:
         xml = zf.read("word/document.xml")
     return ET.fromstring(xml)
+
+
+def paragraph_text_with_tabs(para: ET.Element) -> str:
+    parts: list[str] = []
+    for node in para.iter():
+        if node.tag == f"{{{W_NS}}}tab":
+            parts.append("\t")
+        elif node.tag == f"{{{W_NS}}}t":
+            parts.append(node.text or "")
+    return "".join(parts).strip()
 
 
 def extract_ts_lines_from_yellow(root: ET.Element) -> list[str]:
@@ -54,19 +67,33 @@ def extract_ts_lines_from_yellow(root: ET.Element) -> list[str]:
     return out
 
 
+def parse_paragraph_row(text: str) -> tuple[str, str, str] | None:
+    tab_match = PARAGRAPH_TAB_LINE_RE.match(text)
+    if tab_match:
+        return tab_match.group(1), tab_match.group(2), tab_match.group(3)
+
+    # Fallback for compact rows where docx text is concatenated without tabs.
+    normalized = text.replace("\u00a0", " ").replace(" ", "")
+    compact_match = PARAGRAPH_COMPACT_LINE_RE.match(normalized)
+    if compact_match:
+        return compact_match.group(1), compact_match.group(2), compact_match.group(3)
+
+    return None
+
+
 def extract_ts_lines_from_all_paragraphs(root: ET.Element) -> list[str]:
     out: list[str] = []
 
     for para in root.findall(".//w:p", NS):
-        text = "".join((t.text or "") for t in para.findall(".//w:t", NS)).strip()
+        text = paragraph_text_with_tabs(para)
         if not text:
             continue
 
-        m = PARAGRAPH_LINE_RE.match(text)
-        if not m:
+        parsed = parse_paragraph_row(text)
+        if parsed is None:
             continue
 
-        start, end, zh = m.group(1), m.group(2), m.group(3)
+        start, end, zh = parsed
         if not HAS_CHINESE_RE.search(zh):
             continue
 

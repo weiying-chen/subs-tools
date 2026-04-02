@@ -5,6 +5,7 @@ import tempfile
 import unittest
 import zipfile
 from pathlib import Path
+import xml.etree.ElementTree as ET
 
 
 MODULE_PATH = Path('/home/weiying/python/subs-tools/extract_subs_timestamps.py')
@@ -33,6 +34,38 @@ class ExtractSubsTimestampsTest(unittest.TestCase):
         path = self._make_docx(xml)
         lines = module.extract_ts_lines(path, mode='auto')
         self.assertEqual(lines, ['00:00:06:28\t00:00:08:11\t大愛真健康'])
+
+    def test_all_mode_extracts_compact_rows(self) -> None:
+        xml = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:p><w:r><w:t>00:00:10:00</w:t></w:r><w:r><w:t>00:00:11:00</w:t></w:r><w:r><w:t>測試字幕</w:t></w:r></w:p>
+  </w:body>
+</w:document>
+'''
+        path = self._make_docx(xml)
+        lines = module.extract_ts_lines(path, mode='all')
+        self.assertEqual(lines, ['00:00:10:00\t00:00:11:00\t測試字幕'])
+
+    def test_paragraph_text_preserves_word_tab_nodes(self) -> None:
+        xml = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:p>
+      <w:r><w:t>00:00:10:00</w:t></w:r>
+      <w:r><w:tab/></w:r>
+      <w:r><w:t>00:00:11:00</w:t></w:r>
+      <w:r><w:tab/></w:r>
+      <w:r><w:t>測試字幕</w:t></w:r>
+    </w:p>
+  </w:body>
+</w:document>
+'''
+        root = ET.fromstring(xml)
+        para = root.find('.//w:p', module.NS)
+        assert para is not None
+        text = module.paragraph_text_with_tabs(para)
+        self.assertEqual(text, '00:00:10:00\t00:00:11:00\t測試字幕')
 
     def test_cli_uses_bracket_action_logs(self) -> None:
         xml = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
