@@ -6,7 +6,6 @@ Subtitle-related tooling in one place.
 
 - `gen_subs.sh`: generate `_al.docx` outputs from `.txt` + source `.docx`.
 - `setup_subs.py`: extract subtitle rows from docx and write sectioned `.txt` + raw `.baseline.txt`.
-- `extract_subs_timestamps.py`: backward-compatible alias to `setup_subs.py`.
 
 ## Usage
 

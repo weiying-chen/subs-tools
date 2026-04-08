@@ -9,7 +9,6 @@ import xml.etree.ElementTree as ET
 
 
 MODULE_PATH = Path('/home/weiying/python/subs-tools/setup_subs.py')
-LEGACY_MODULE_PATH = Path('/home/weiying/python/subs-tools/extract_subs_timestamps.py')
 spec = importlib.util.spec_from_file_location('setup_subs', MODULE_PATH)
 module = importlib.util.module_from_spec(spec)
 assert spec and spec.loader
@@ -83,35 +82,6 @@ class ExtractSubsTimestampsTest(unittest.TestCase):
             [
                 'python3',
                 str(MODULE_PATH),
-                str(path),
-                '--mode',
-                'all',
-                '--out',
-                'txt',
-                '--force',
-            ],
-            check=True,
-            capture_output=True,
-            text=True,
-            env=env,
-        )
-        self.assertIn('[wrote]', result.stdout)
-
-    def test_legacy_cli_alias_still_works(self) -> None:
-        xml = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-  <w:body>
-    <w:p><w:r><w:t>00:00:10:00\t00:00:11:00\t測試</w:t></w:r></w:p>
-  </w:body>
-</w:document>
-'''
-        path = self._make_docx(xml)
-        env = dict(os.environ)
-        env['PYTHONDONTWRITEBYTECODE'] = '1'
-        result = subprocess.run(
-            [
-                'python3',
-                str(LEGACY_MODULE_PATH),
                 str(path),
                 '--mode',
                 'all',
