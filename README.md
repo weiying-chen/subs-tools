@@ -5,7 +5,8 @@ Subtitle-related tooling in one place.
 ## Scripts
 
 - `gen_subs.sh`: generate `_al.docx` outputs from `.txt` + source `.docx`.
-- `extract_subs_timestamps.py`: extract `start<TAB>end<TAB>text` rows from docx.
+- `setup_subs.py`: extract subtitle rows from docx and write sectioned `.txt` + raw `.baseline.txt`.
+- `extract_subs_timestamps.py`: backward-compatible alias to `setup_subs.py`.
 
 ## Usage
 
@@ -15,16 +16,16 @@ Generate subtitle docx files:
 /home/weiying/python/subs-tools/gen_subs.sh /path/to/target_dir
 ```
 
-Extract timestamps from all docx in current directory (default `--mode auto`):
+Prepare subtitle files from all docx in current directory (default `--mode auto`):
 
 ```bash
-python3 /home/weiying/python/subs-tools/extract_subs_timestamps.py . --force
+python3 /home/weiying/python/subs-tools/setup_subs.py . --force
 ```
 
 Write only baseline output:
 
 ```bash
-python3 /home/weiying/python/subs-tools/extract_subs_timestamps.py . --out baseline --force
+python3 /home/weiying/python/subs-tools/setup_subs.py . --out baseline --force
 ```
 
 Extraction mode options:

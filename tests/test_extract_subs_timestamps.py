@@ -8,8 +8,9 @@ from pathlib import Path
 import xml.etree.ElementTree as ET
 
 
-MODULE_PATH = Path('/home/weiying/python/subs-tools/extract_subs_timestamps.py')
-spec = importlib.util.spec_from_file_location('extract_subs_timestamps', MODULE_PATH)
+MODULE_PATH = Path('/home/weiying/python/subs-tools/setup_subs.py')
+LEGACY_MODULE_PATH = Path('/home/weiying/python/subs-tools/extract_subs_timestamps.py')
+spec = importlib.util.spec_from_file_location('setup_subs', MODULE_PATH)
 module = importlib.util.module_from_spec(spec)
 assert spec and spec.loader
 spec.loader.exec_module(module)
@@ -95,6 +96,76 @@ class ExtractSubsTimestampsTest(unittest.TestCase):
             env=env,
         )
         self.assertIn('[wrote]', result.stdout)
+
+    def test_legacy_cli_alias_still_works(self) -> None:
+        xml = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:p><w:r><w:t>00:00:10:00\t00:00:11:00\t測試</w:t></w:r></w:p>
+  </w:body>
+</w:document>
+'''
+        path = self._make_docx(xml)
+        env = dict(os.environ)
+        env['PYTHONDONTWRITEBYTECODE'] = '1'
+        result = subprocess.run(
+            [
+                'python3',
+                str(LEGACY_MODULE_PATH),
+                str(path),
+                '--mode',
+                'all',
+                '--out',
+                'txt',
+                '--force',
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        self.assertIn('[wrote]', result.stdout)
+
+    def test_render_output_content_formats_non_baseline(self) -> None:
+        content = module.render_output_content(
+            ['00:00:10:00\t00:00:11:00\t測試字幕'],
+            is_baseline=False,
+        )
+        self.assertTrue(content.startswith('YT_TITLE_SUGGESTED:\nTITLE_SUGGESTED:\n'))
+        self.assertIn('\nBODY:\n00:00:10:00\t00:00:11:00\t測試字幕\n', content)
+
+    def test_cli_writes_txt_with_sections_and_baseline_raw(self) -> None:
+        xml = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:p><w:r><w:t>00:00:10:00\t00:00:11:00\t測試</w:t></w:r></w:p>
+  </w:body>
+</w:document>
+'''
+        path = self._make_docx(xml)
+        env = dict(os.environ)
+        env['PYTHONDONTWRITEBYTECODE'] = '1'
+        subprocess.run(
+            [
+                'python3',
+                str(MODULE_PATH),
+                str(path),
+                '--mode',
+                'all',
+                '--out',
+                'both',
+                '--force',
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        txt_content = path.with_suffix('.txt').read_text(encoding='utf-8')
+        baseline_content = path.with_suffix('.baseline.txt').read_text(encoding='utf-8')
+        self.assertIn('BODY:\n00:00:10:00\t00:00:11:00\t測試\n', txt_content)
+        self.assertTrue(txt_content.startswith('YT_TITLE_SUGGESTED:\n'))
+        self.assertEqual(baseline_content, '00:00:10:00\t00:00:11:00\t測試\n')
 
 
 if __name__ == '__main__':
