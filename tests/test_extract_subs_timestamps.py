@@ -67,6 +67,24 @@ class ExtractSubsTimestampsTest(unittest.TestCase):
         text = module.paragraph_text_with_tabs(para)
         self.assertEqual(text, '00:00:10:00\t00:00:11:00\t測試字幕')
 
+    def test_yellow_mode_extracts_rows_split_across_runs(self) -> None:
+        xml = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:p>
+      <w:r><w:rPr><w:highlight w:val="yellow"/></w:rPr><w:t>00:00:10:00</w:t></w:r>
+      <w:r><w:rPr><w:highlight w:val="yellow"/></w:rPr><w:tab/></w:r>
+      <w:r><w:rPr><w:highlight w:val="yellow"/></w:rPr><w:t>00:00:11:00</w:t></w:r>
+      <w:r><w:rPr><w:highlight w:val="yellow"/></w:rPr><w:tab/></w:r>
+      <w:r><w:rPr><w:highlight w:val="yellow"/></w:rPr><w:t>測試字幕</w:t></w:r>
+    </w:p>
+  </w:body>
+</w:document>
+'''
+        path = self._make_docx(xml)
+        lines = module.extract_ts_lines(path, mode='yellow')
+        self.assertEqual(lines, ['00:00:10:00\t00:00:11:00\t測試字幕'])
+
     def test_cli_uses_bracket_action_logs(self) -> None:
         xml = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">

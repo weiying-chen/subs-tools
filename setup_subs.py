@@ -40,25 +40,47 @@ def paragraph_text_with_tabs(para: ET.Element) -> str:
     return "".join(parts).strip()
 
 
+def run_is_yellow(run: ET.Element) -> bool:
+    hl = run.find("./w:rPr/w:highlight", NS)
+    return hl is not None and hl.attrib.get(f"{{{W_NS}}}val") == "yellow"
+
+
+def yellow_paragraph_text_with_tabs(para: ET.Element) -> str:
+    parts: list[str] = []
+    for run in para.findall(".//w:r", NS):
+        if not run_is_yellow(run):
+            continue
+        for node in run.iter():
+            if node.tag == f"{{{W_NS}}}tab":
+                parts.append("\t")
+            elif node.tag == f"{{{W_NS}}}t":
+                parts.append(node.text or "")
+    return "".join(parts).strip()
+
+
+def normalize_compact_text(text: str) -> str:
+    # Normalize BOM/zero-width/no-break characters frequently found in Word runs.
+    return (
+        text.replace("\ufeff", "")
+        .replace("\u200b", "")
+        .replace("\u00a0", " ")
+        .replace(" ", "")
+    )
+
+
 def extract_ts_lines_from_yellow(root: ET.Element) -> list[str]:
     out: list[str] = []
 
-    for run in root.findall(".//w:r", NS):
-        hl = run.find("./w:rPr/w:highlight", NS)
-        if hl is None or hl.attrib.get(f"{{{W_NS}}}val") != "yellow":
-            continue
-
-        text = "".join((t.text or "") for t in run.findall(".//w:t", NS)).strip()
+    for para in root.findall(".//w:p", NS):
+        text = yellow_paragraph_text_with_tabs(para)
         if not text:
             continue
 
-        # Remove spacing that may appear between concatenated fields.
-        normalized = text.replace("\u00a0", " ").replace(" ", "")
-        m = HIGHLIGHTED_LINE_RE.match(normalized)
-        if not m:
+        parsed = parse_paragraph_row(text)
+        if parsed is None:
             continue
 
-        start, end, zh = m.group(1), m.group(2), m.group(3)
+        start, end, zh = parsed
         if not HAS_CHINESE_RE.search(zh):
             continue
 
@@ -73,7 +95,7 @@ def parse_paragraph_row(text: str) -> tuple[str, str, str] | None:
         return tab_match.group(1), tab_match.group(2), tab_match.group(3)
 
     # Fallback for compact rows where docx text is concatenated without tabs.
-    normalized = text.replace("\u00a0", " ").replace(" ", "")
+    normalized = normalize_compact_text(text)
     compact_match = PARAGRAPH_COMPACT_LINE_RE.match(normalized)
     if compact_match:
         return compact_match.group(1), compact_match.group(2), compact_match.group(3)
@@ -179,8 +201,16 @@ def gather_docx_paths(paths: list[Path]) -> list[Path]:
     out: list[Path] = []
     for p in paths:
         if p.is_dir():
-            out.extend(sorted(p.glob("*.docx")))
+            out.extend(
+                sorted(
+                    docx_path
+                    for docx_path in p.glob("*.docx")
+                    if not docx_path.name.startswith("~$")
+                )
+            )
         elif p.is_file() and p.suffix.lower() == ".docx":
+            if p.name.startswith("~$"):
+                continue
             out.append(p)
 
     # de-dup while preserving order
@@ -202,7 +232,11 @@ def main() -> int:
         return 2
 
     for docx_path in docx_paths:
-        lines = extract_ts_lines(docx_path, mode=args.mode)
+        try:
+            lines = extract_ts_lines(docx_path, mode=args.mode)
+        except (zipfile.BadZipFile, KeyError, ET.ParseError) as exc:
+            print(f"[skip] invalid docx: {docx_path} ({exc})")
+            continue
 
         out_paths: list[Path] = []
         if args.out in ("both", "txt"):
