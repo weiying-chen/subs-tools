@@ -93,5 +93,3 @@ for png in "$TARGET_DIR"/*.png; do
   echo "[copied] $(basename "$png")"
   ((copied_png+=1))
  done
-
-echo "[summary] generated=$processed copied_png=$copied_png skipped=$skipped"
