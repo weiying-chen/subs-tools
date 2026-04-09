@@ -157,7 +157,7 @@ def render_output_content(lines: list[str], *, is_baseline: bool) -> str:
     body = "\n".join(lines)
     content = "\n".join(sections)
     if body:
-        content = f"{content}\n{body}"
+        content = f"{content}\n\n{body}"
     return content + "\n"
 
 

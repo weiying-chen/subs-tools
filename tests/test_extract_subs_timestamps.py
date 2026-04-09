@@ -120,7 +120,7 @@ class ExtractSubsTimestampsTest(unittest.TestCase):
             is_baseline=False,
         )
         self.assertTrue(content.startswith('YT_TITLE_SUGGESTED:\nTITLE_SUGGESTED:\n'))
-        self.assertIn('\nBODY:\n00:00:10:00\t00:00:11:00\t測試字幕\n', content)
+        self.assertIn('\nBODY:\n\n00:00:10:00\t00:00:11:00\t測試字幕\n', content)
 
     def test_cli_writes_txt_with_sections_and_baseline_raw(self) -> None:
         xml = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -151,7 +151,7 @@ class ExtractSubsTimestampsTest(unittest.TestCase):
         )
         txt_content = path.with_suffix('.txt').read_text(encoding='utf-8')
         baseline_content = path.with_suffix('.baseline.txt').read_text(encoding='utf-8')
-        self.assertIn('BODY:\n00:00:10:00\t00:00:11:00\t測試\n', txt_content)
+        self.assertIn('BODY:\n\n00:00:10:00\t00:00:11:00\t測試\n', txt_content)
         self.assertTrue(txt_content.startswith('YT_TITLE_SUGGESTED:\n'))
         self.assertEqual(baseline_content, '00:00:10:00\t00:00:11:00\t測試\n')
 
