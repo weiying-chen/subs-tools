@@ -6,6 +6,7 @@ Subtitle-related tooling in one place.
 
 - `gen_subs.sh`: generate `_al.docx` outputs from `.txt` + source `.docx`.
 - `setup_subs.py`: extract subtitle rows from docx and write sectioned `.txt` + raw `.baseline.txt`.
+- `crop_subs.py`: center-crop images to exact 16:9 in a directory.
 
 ## Usage
 
@@ -25,6 +26,18 @@ Write only baseline output:
 
 ```bash
 python3 /home/weiying/python/subs-tools/setup_subs.py . --out baseline --force
+```
+
+Crop images in current directory to exact 16:9 (writes `*_16x9` files):
+
+```bash
+python3 /home/weiying/python/subs-tools/crop_subs.py .
+```
+
+Crop and overwrite originals:
+
+```bash
+python3 /home/weiying/python/subs-tools/crop_subs.py . --overwrite
 ```
 
 Extraction mode options:
