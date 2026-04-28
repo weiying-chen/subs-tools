@@ -19,22 +19,17 @@ def missing_magick_message() -> str:
 
 
 def compute_center_crop(width: int, height: int) -> tuple[int, int, int, int]:
-    target = RATIO_WIDTH / RATIO_HEIGHT
-    current = width / height
+    if width <= 0 or height <= 0:
+        raise ValueError('Image dimensions must be positive integers.')
 
-    if abs(current - target) < 1e-12:
-        return width, height, 0, 0
+    scale = min(width // RATIO_WIDTH, height // RATIO_HEIGHT)
+    if scale <= 0:
+        raise ValueError('Image is too small to crop to 16:9.')
 
-    if current > target:
-        crop_width = (height * RATIO_WIDTH) // RATIO_HEIGHT
-        crop_height = height
-        x = (width - crop_width) // 2
-        y = 0
-    else:
-        crop_width = width
-        crop_height = (width * RATIO_HEIGHT) // RATIO_WIDTH
-        x = 0
-        y = (height - crop_height) // 2
+    crop_width = RATIO_WIDTH * scale
+    crop_height = RATIO_HEIGHT * scale
+    x = (width - crop_width) // 2
+    y = (height - crop_height) // 2
 
     return crop_width, crop_height, x, y
 
