@@ -103,6 +103,31 @@ def parse_paragraph_row(text: str) -> tuple[str, str, str] | None:
     return None
 
 
+def extract_ts_lines_from_paragraphs_with_any_yellow(root: ET.Element) -> list[str]:
+    out: list[str] = []
+
+    for para in root.findall(".//w:p", NS):
+        has_yellow = any(run_is_yellow(run) for run in para.findall('.//w:r', NS))
+        if not has_yellow:
+            continue
+
+        text = paragraph_text_with_tabs(para)
+        if not text:
+            continue
+
+        parsed = parse_paragraph_row(text)
+        if parsed is None:
+            continue
+
+        start, end, zh = parsed
+        if not HAS_CHINESE_RE.search(zh):
+            continue
+
+        out.append(f"{start}\t{end}\t{zh}")
+
+    return out
+
+
 def extract_ts_lines_from_all_paragraphs(root: ET.Element) -> list[str]:
     out: list[str] = []
 
@@ -133,11 +158,21 @@ def extract_ts_lines(docx_path: Path, mode: str = "auto") -> list[str]:
     if mode == "all":
         return extract_ts_lines_from_all_paragraphs(root)
 
-    # auto: prefer yellow-highlighted extraction, then fallback to all lines.
+    # auto: prefer yellow-highlighted extraction, and keep rows from
+    # paragraphs that contain yellow runs (for partial-highlight rows).
     yellow_lines = extract_ts_lines_from_yellow(root)
-    if yellow_lines:
-        return yellow_lines
-    return extract_ts_lines_from_all_paragraphs(root)
+    if not yellow_lines:
+        return extract_ts_lines_from_all_paragraphs(root)
+
+    para_yellow_lines = extract_ts_lines_from_paragraphs_with_any_yellow(root)
+    merged: list[str] = []
+    seen: set[str] = set()
+    for line in para_yellow_lines + yellow_lines:
+        if line in seen:
+            continue
+        seen.add(line)
+        merged.append(line)
+    return merged
 
 
 def render_output_content(lines: list[str], *, is_baseline: bool) -> str:
@@ -146,6 +181,7 @@ def render_output_content(lines: list[str], *, is_baseline: bool) -> str:
 
     sections = [
         "YT_TITLE_SUGGESTED:",
+        "",
         "TITLE_SUGGESTED:",
         "",
         "INTRO:",
