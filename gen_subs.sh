@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -uo pipefail
 
 usage() {
-  cat <<'EOF'
+  cat <<'EOF2'
 Usage:
   gen_subs.sh [target_dir]
 
@@ -14,7 +14,7 @@ Environment overrides:
   GENERATE_SUBS_SCRIPT   default: $HOME/python/word/generate_subs.py
   GENERATE_SUBS_PYTHON   default: $HOME/python/word/.venv/bin/python
   GENERATE_SUBS_TEMPLATE default: $HOME/python/word/templates/subs_template.docx
-EOF
+EOF2
 }
 
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
@@ -62,6 +62,8 @@ fi
 
 processed=0
 skipped=0
+failed=0
+thumbnails_to_copy=()
 
 for txt in "${txt_files[@]}"; do
   txt_name="$(basename "$txt")"
@@ -75,21 +77,45 @@ for txt in "${txt_files[@]}"; do
     continue
   fi
 
-  "$PYTHON_BIN" "$SCRIPT_PATH" \
+  if output="$($PYTHON_BIN "$SCRIPT_PATH" \
     --template "$TEMPLATE_PATH" \
     --source-docx "$src" \
     --input "$txt" \
-    --output "$out"
+    --output "$out" 2>&1)"; then
+    generated_path="${out%.docx}_al.docx"
+    echo "[created] $(basename "$generated_path")"
+    ((processed+=1))
 
-  generated_path="${out%.docx}_al.docx"
-  echo "[created] $(basename "$generated_path")"
-  ((processed+=1))
- done
+    while IFS= read -r thumb; do
+      thumb="${thumb#THUMBNAIL:}"
+      thumb="${thumb# }"
+      [[ -z "$thumb" ]] && continue
+      thumbnails_to_copy+=("$thumb")
+    done < <(grep -E '^THUMBNAIL:' "$txt" || true)
+  else
+    ((failed+=1))
+    printf '%s\n' "$output" >&2
+  fi
+done
 
 copied_png=0
-for png in "$TARGET_DIR"/*.png; do
-  dest_png="${OUTPUT_DIR}/$(basename "$png")"
-  cp -f -- "$png" "$dest_png"
-  echo "[copied] $(basename "$png")"
-  ((copied_png+=1))
- done
+if [[ ${#thumbnails_to_copy[@]} -gt 0 ]]; then
+  declare -A seen=()
+  for thumb in "${thumbnails_to_copy[@]}"; do
+    [[ -n "${seen[$thumb]+x}" ]] && continue
+    seen[$thumb]=1
+    src_png="${TARGET_DIR%/}/$thumb"
+    if [[ ! -f "$src_png" ]]; then
+      continue
+    fi
+    dest_png="${OUTPUT_DIR}/$(basename "$thumb")"
+    cp -f -- "$src_png" "$dest_png"
+    echo "[copied] $(basename "$thumb")"
+    ((copied_png+=1))
+  done
+fi
+
+echo "[done] generated: $processed, skipped: $skipped, copied png: $copied_png, failed: $failed"
+if (( failed > 0 )); then
+  exit 1
+fi
