@@ -85,11 +85,7 @@ def parse_args() -> argparse.Namespace:
         default='.',
         help='Directory to scan (default: current directory).',
     )
-    parser.add_argument(
-        '--overwrite',
-        action='store_true',
-        help='Overwrite input files instead of writing *_16x9 outputs.',
-    )
+    parser.set_defaults(overwrite=True)
     return parser.parse_args()
 
 

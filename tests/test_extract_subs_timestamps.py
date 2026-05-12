@@ -85,6 +85,37 @@ class ExtractSubsTimestampsTest(unittest.TestCase):
         lines = module.extract_ts_lines(path, mode='yellow')
         self.assertEqual(lines, ['00:00:10:00\t00:00:11:00\t測試字幕'])
 
+    def test_auto_mode_keeps_rows_with_partial_highlight(self) -> None:
+        xml = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:p>
+      <w:r><w:rPr><w:highlight w:val="yellow"/></w:rPr><w:t>00:07:50:00</w:t></w:r>
+      <w:r><w:rPr><w:highlight w:val="yellow"/></w:rPr><w:tab/></w:r>
+      <w:r><w:rPr><w:highlight w:val="yellow"/></w:rPr><w:t>00:07:52:00</w:t></w:r>
+      <w:r><w:rPr><w:highlight w:val="yellow"/></w:rPr><w:tab/></w:r>
+      <w:r><w:rPr><w:highlight w:val="yellow"/></w:rPr><w:t>前一行</w:t></w:r>
+    </w:p>
+    <w:p>
+      <w:r><w:rPr><w:highlight w:val="yellow"/></w:rPr><w:t>00:07:54:26</w:t></w:r>
+      <w:r><w:rPr><w:highlight w:val="yellow"/></w:rPr><w:tab/></w:r>
+      <w:r><w:rPr><w:highlight w:val="yellow"/></w:rPr><w:t>00:07:56:25</w:t></w:r>
+      <w:r><w:rPr><w:highlight w:val="yellow"/></w:rPr><w:tab/></w:r>
+      <w:r><w:t>當董事長當了十幾年</w:t></w:r>
+    </w:p>
+  </w:body>
+</w:document>
+'''
+        path = self._make_docx(xml)
+        lines = module.extract_ts_lines(path, mode='auto')
+        self.assertEqual(
+            lines,
+            [
+                '00:07:50:00\t00:07:52:00\t前一行',
+                '00:07:54:26\t00:07:56:25\t當董事長當了十幾年',
+            ],
+        )
+
     def test_cli_uses_bracket_action_logs(self) -> None:
         xml = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
@@ -119,7 +150,9 @@ class ExtractSubsTimestampsTest(unittest.TestCase):
             ['00:00:10:00\t00:00:11:00\t測試字幕'],
             is_baseline=False,
         )
-        self.assertTrue(content.startswith('YT_TITLE_SUGGESTED:\nTITLE_SUGGESTED:\n'))
+        self.assertTrue(
+            content.startswith('YT_TITLE_SUGGESTED:\n\nTITLE_SUGGESTED:\n\n')
+        )
         self.assertIn('\nBODY:\n\n00:00:10:00\t00:00:11:00\t測試字幕\n', content)
 
     def test_cli_writes_txt_with_sections_and_baseline_raw(self) -> None:

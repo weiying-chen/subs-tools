@@ -1,6 +1,7 @@
 import importlib.util
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 MODULE_PATH = Path('/home/weiying/python/subs-tools/crop_subs.py')
@@ -30,6 +31,16 @@ class CropSubsTest(unittest.TestCase):
     def test_crop_dimensions_are_exact_16_by_9(self) -> None:
         crop_width, crop_height, _, _ = module.compute_center_crop(564, 318)
         self.assertEqual(crop_width * 9, crop_height * 16)
+
+    def test_parse_args_defaults_to_overwrite(self) -> None:
+        with mock.patch('sys.argv', ['crop_subs.py']):
+            args = module.parse_args()
+        self.assertTrue(args.overwrite)
+
+    def test_parse_args_has_no_suffix_output_flag(self) -> None:
+        with mock.patch('sys.argv', ['crop_subs.py', '--suffix-output']):
+            with self.assertRaises(SystemExit):
+                module.parse_args()
 
 
 if __name__ == '__main__':
