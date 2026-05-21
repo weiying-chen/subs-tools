@@ -14,6 +14,7 @@ Environment overrides:
   GENERATE_SUBS_SCRIPT   default: $HOME/python/word/generate_subs.py
   GENERATE_SUBS_PYTHON   default: $HOME/python/word/.venv/bin/python
   GENERATE_SUBS_TEMPLATE default: $HOME/python/word/templates/subs_template.docx
+  GENERATE_SUBS_CROP_SCRIPT default: <this-script-dir>/crop_subs.py
 EOF2
 }
 
@@ -26,6 +27,7 @@ TARGET_DIR="${1:-.}"
 SCRIPT_PATH="${GENERATE_SUBS_SCRIPT:-$HOME/python/word/generate_subs.py}"
 PYTHON_BIN="${GENERATE_SUBS_PYTHON:-$HOME/python/word/.venv/bin/python}"
 TEMPLATE_PATH="${GENERATE_SUBS_TEMPLATE:-$HOME/python/word/templates/subs_template.docx}"
+CROP_SCRIPT_PATH="${GENERATE_SUBS_CROP_SCRIPT:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/crop_subs.py}"
 OUTPUT_DIR="${TARGET_DIR%/}/output"
 
 if [[ ! -d "$TARGET_DIR" ]]; then
@@ -45,6 +47,11 @@ fi
 
 if [[ ! -f "$TEMPLATE_PATH" ]]; then
   echo "[error] template not found: $TEMPLATE_PATH" >&2
+  exit 1
+fi
+
+if [[ ! -f "$CROP_SCRIPT_PATH" ]]; then
+  echo "[error] crop script not found: $CROP_SCRIPT_PATH" >&2
   exit 1
 fi
 
@@ -98,6 +105,23 @@ for txt in "${txt_files[@]}"; do
   fi
 done
 
+crop_failed=0
+if crop_output="$($PYTHON_BIN "$CROP_SCRIPT_PATH" "$TARGET_DIR" 2>&1)"; then
+  while IFS= read -r line; do
+    [[ -z "$line" ]] && continue
+    cleaned="$line"
+    cleaned="${cleaned#\[wrote\] }"
+    cleaned="${cleaned#${TARGET_DIR%/}/}"
+    echo "[crop] $cleaned"
+  done <<< "$crop_output"
+else
+  crop_failed=1
+  while IFS= read -r line; do
+    [[ -z "$line" ]] && continue
+    echo "[crop] $line" >&2
+  done <<< "$crop_output"
+fi
+
 copied_png=0
 if [[ ${#thumbnails_to_copy[@]} -gt 0 ]]; then
   declare -A seen=()
@@ -115,7 +139,10 @@ if [[ ${#thumbnails_to_copy[@]} -gt 0 ]]; then
   done
 fi
 
-echo "[done] generated: $processed, skipped: $skipped, copied png: $copied_png, failed: $failed"
+echo "[done] generated: $processed, skipped: $skipped, copied png: $copied_png, failed: $failed, crop_failed: $crop_failed"
 if (( failed > 0 )); then
+  exit 1
+fi
+if (( crop_failed > 0 )); then
   exit 1
 fi
