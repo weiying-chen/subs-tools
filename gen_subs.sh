@@ -96,6 +96,7 @@ for txt in "${txt_files[@]}"; do
     while IFS= read -r thumb; do
       thumb="${thumb#THUMBNAIL:}"
       thumb="${thumb# }"
+      thumb="$(printf '%s' "$thumb" | sed -E 's/[[:space:]]*\*+[[:space:]]*$//')"
       [[ -z "$thumb" ]] && continue
       thumbnails_to_copy+=("$thumb")
     done < <(grep -E '^THUMBNAIL:' "$txt" || true)

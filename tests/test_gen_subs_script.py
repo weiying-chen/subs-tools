@@ -124,6 +124,58 @@ class GenSubsScriptTest(unittest.TestCase):
         self.assertTrue(copied_thumb.exists())
         self.assertEqual(copied_thumb.read_text(encoding='utf-8'), 'after-crop')
 
+    def test_thumbnail_parser_ignores_trailing_star_marker(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix='subs_tools_gen_test_'))
+        target_dir = temp_dir / 'target'
+        target_dir.mkdir(parents=True, exist_ok=True)
+
+        (target_dir / 'sample.txt').write_text(
+            'YT_TITLE_SUGGESTED:\n\nTITLE_SUGGESTED:\n\nINTRO:\n\nTHUMBNAIL: thumb.png *\n\nBODY:\n\n',
+            encoding='utf-8',
+        )
+        (target_dir / 'sample.docx').write_text('dummy', encoding='utf-8')
+        (target_dir / 'thumb.png').write_text('thumb-content', encoding='utf-8')
+
+        template_path = temp_dir / 'template.docx'
+        template_path.write_text('template', encoding='utf-8')
+
+        generate_script = temp_dir / 'fake_generate_subs.py'
+        generate_script.write_text(
+            '#!/usr/bin/env python3\n'
+            'import sys\n'
+            'sys.exit(0)\n',
+            encoding='utf-8',
+        )
+        generate_script.chmod(generate_script.stat().st_mode | stat.S_IXUSR)
+
+        crop_script = temp_dir / 'fake_crop_subs.py'
+        crop_script.write_text(
+            '#!/usr/bin/env python3\n'
+            'print("[wrote] thumb.png")\n',
+            encoding='utf-8',
+        )
+        crop_script.chmod(crop_script.stat().st_mode | stat.S_IXUSR)
+
+        env = dict(os.environ)
+        env.update(
+            {
+                'GENERATE_SUBS_SCRIPT': str(generate_script),
+                'GENERATE_SUBS_PYTHON': '/usr/bin/python3',
+                'GENERATE_SUBS_TEMPLATE': str(template_path),
+                'GENERATE_SUBS_CROP_SCRIPT': str(crop_script),
+            }
+        )
+        result = subprocess.run(
+            [str(SCRIPT_PATH), str(target_dir)],
+            check=True,
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+
+        self.assertIn('[copied] thumb.png', result.stdout)
+        self.assertTrue((target_dir / 'output' / 'thumb.png').exists())
+
 
 if __name__ == '__main__':
     unittest.main()
