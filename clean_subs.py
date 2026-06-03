@@ -3,12 +3,29 @@
 from __future__ import annotations
 
 import argparse
+from io import BytesIO
 from pathlib import Path
+from zipfile import ZIP_DEFLATED, ZipFile
+import xml.etree.ElementTree as ET
 
 from docx import Document
 
 
-INDENT_THRESHOLD_PT = 24.0
+INDENT_THRESHOLD_PT = 21.0
+WORD_NAMESPACE = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+INSERTION_TAGS = {f"{{{WORD_NAMESPACE}}}ins", f"{{{WORD_NAMESPACE}}}moveTo"}
+DELETION_TAGS = {f"{{{WORD_NAMESPACE}}}del", f"{{{WORD_NAMESPACE}}}moveFrom"}
+CHANGE_TAGS = {
+    f"{{{WORD_NAMESPACE}}}pPrChange",
+    f"{{{WORD_NAMESPACE}}}rPrChange",
+    f"{{{WORD_NAMESPACE}}}tblPrChange",
+    f"{{{WORD_NAMESPACE}}}tcPrChange",
+    f"{{{WORD_NAMESPACE}}}trPrChange",
+    f"{{{WORD_NAMESPACE}}}moveFromRangeStart",
+    f"{{{WORD_NAMESPACE}}}moveFromRangeEnd",
+    f"{{{WORD_NAMESPACE}}}moveToRangeStart",
+    f"{{{WORD_NAMESPACE}}}moveToRangeEnd",
+}
 
 
 def _remove_paragraph(paragraph) -> None:
@@ -38,8 +55,49 @@ def _is_indented_content_paragraph(paragraph) -> bool:
     return left_indent is not None and left_indent >= INDENT_THRESHOLD_PT
 
 
+def _rewrite_revision_children(element) -> bool:
+    changed = False
+    idx = 0
+    while idx < len(element):
+        child = element[idx]
+        if child.tag in INSERTION_TAGS:
+            grandchildren = list(child)
+            element.remove(child)
+            for offset, grandchild in enumerate(grandchildren):
+                element.insert(idx + offset, grandchild)
+            changed = True
+            idx += len(grandchildren)
+            continue
+        if child.tag in DELETION_TAGS or child.tag in CHANGE_TAGS:
+            element.remove(child)
+            changed = True
+            continue
+        if _rewrite_revision_children(child):
+            changed = True
+        idx += 1
+    return changed
+
+
+def _accept_revisions_in_tree(root) -> None:
+    while _rewrite_revision_children(root):
+        pass
+
+
+def _accepted_revisions_docx_bytes(input_path: Path) -> bytes:
+    buffer = BytesIO()
+    with ZipFile(input_path, "r") as zin, ZipFile(buffer, "w", compression=ZIP_DEFLATED) as zout:
+        for info in zin.infolist():
+            data = zin.read(info.filename)
+            if info.filename.startswith("word/") and info.filename.endswith(".xml"):
+                root = ET.fromstring(data)
+                _accept_revisions_in_tree(root)
+                data = ET.tostring(root, encoding="utf-8", xml_declaration=True)
+            zout.writestr(info, data)
+    return buffer.getvalue()
+
+
 def remove_sources_from_docx(input_path: Path, output_path: Path) -> None:
-    doc = Document(str(input_path))
+    doc = Document(BytesIO(_accepted_revisions_docx_bytes(input_path)))
     paragraphs = list(doc.paragraphs)
     remove_indexes = {
         idx for idx, paragraph in enumerate(paragraphs) if _is_indented_content_paragraph(paragraph)
