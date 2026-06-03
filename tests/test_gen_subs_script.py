@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 
 
-SCRIPT_PATH = Path('/home/weiying/python/subs-tools/gen_subs.sh')
+SCRIPT_PATH = Path(__file__).resolve().parents[1] / 'gen_subs.sh'
 
 
 class GenSubsScriptTest(unittest.TestCase):

@@ -4,7 +4,7 @@ from pathlib import Path
 from unittest import mock
 
 
-MODULE_PATH = Path('/home/weiying/python/subs-tools/crop_subs.py')
+MODULE_PATH = Path(__file__).resolve().parents[1] / 'crop_subs.py'
 spec = importlib.util.spec_from_file_location('crop_subs', MODULE_PATH)
 module = importlib.util.module_from_spec(spec)
 assert spec and spec.loader

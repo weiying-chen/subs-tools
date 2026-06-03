@@ -4,7 +4,7 @@ from pathlib import Path
 
 class InstallScriptTest(unittest.TestCase):
     def test_install_script_exists_with_required_steps(self) -> None:
-        script = Path('/home/weiying/python/subs-tools/install_imagemagick7.sh')
+        script = Path(__file__).resolve().parents[1] / 'install_imagemagick7.sh'
         self.assertTrue(script.exists())
         content = script.read_text(encoding='utf-8')
         self.assertIn('sudo apt install -y', content)

@@ -8,7 +8,7 @@ from pathlib import Path
 import xml.etree.ElementTree as ET
 
 
-MODULE_PATH = Path('/home/weiying/python/subs-tools/setup_subs.py')
+MODULE_PATH = Path(__file__).resolve().parents[1] / 'setup_subs.py'
 spec = importlib.util.spec_from_file_location('setup_subs', MODULE_PATH)
 module = importlib.util.module_from_spec(spec)
 assert spec and spec.loader
