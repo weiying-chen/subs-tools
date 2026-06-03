@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 from io import BytesIO
 from pathlib import Path
+import re
 from zipfile import ZIP_DEFLATED, ZipFile
 import xml.etree.ElementTree as ET
 
@@ -12,6 +13,22 @@ from docx import Document
 
 
 INDENT_THRESHOLD_PT = 21.0
+TIMESTAMP_LINE_RE = re.compile(
+    r"^(?:[^\t]+\t)?\d{2}:\d{2}:\d{2}:\d{2}\t\d{2}:\d{2}:\d{2}:\d{2}\t"
+)
+SECTION_LABELS = {
+    "建議YT標題：",
+    "建議YT標題:",
+    "建議標題：",
+    "建議標題:",
+    "簡介：",
+    "簡介:",
+    "選圖：",
+    "選圖:",
+    "字幕：",
+    "字幕:",
+}
+SUBTITLE_LABELS = {"字幕：", "字幕:"}
 WORD_NAMESPACE = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 INSERTION_TAGS = {f"{{{WORD_NAMESPACE}}}ins", f"{{{WORD_NAMESPACE}}}moveTo"}
 DELETION_TAGS = {f"{{{WORD_NAMESPACE}}}del", f"{{{WORD_NAMESPACE}}}moveFrom"}
@@ -53,6 +70,30 @@ def _is_indented_content_paragraph(paragraph) -> bool:
         return False
     left_indent = _left_indent_pt(paragraph)
     return left_indent is not None and left_indent >= INDENT_THRESHOLD_PT
+
+
+def _is_timestamp_paragraph(paragraph) -> bool:
+    return bool(TIMESTAMP_LINE_RE.match(paragraph.text.strip()))
+
+
+def _paragraph_has_drawing(paragraph) -> bool:
+    return paragraph._p.find(
+        ".//w:drawing",
+        {"w": WORD_NAMESPACE},
+    ) is not None
+
+
+def _paragraph_has_content(paragraph) -> bool:
+    return bool(paragraph.text.strip()) or _paragraph_has_drawing(paragraph)
+
+
+def _section_kind(paragraph) -> str | None:
+    text = paragraph.text.strip()
+    if text in SUBTITLE_LABELS:
+        return "subs"
+    if text in SECTION_LABELS:
+        return "other"
+    return None
 
 
 def _rewrite_revision_children(element) -> bool:
@@ -116,12 +157,12 @@ def remove_sources_from_docx(input_path: Path, output_path: Path) -> None:
 
         for start, end in block_ranges:
             prev_idx = start - 1
-            while prev_idx >= 0 and not paragraphs[prev_idx].text.strip():
+            while prev_idx >= 0 and not _paragraph_has_content(paragraphs[prev_idx]):
                 remove_indexes.add(prev_idx)
                 prev_idx -= 1
 
             next_idx = end + 1
-            while next_idx < len(paragraphs) and not paragraphs[next_idx].text.strip():
+            while next_idx < len(paragraphs) and not _paragraph_has_content(paragraphs[next_idx]):
                 remove_indexes.add(next_idx)
                 next_idx += 1
 
@@ -131,16 +172,16 @@ def remove_sources_from_docx(input_path: Path, output_path: Path) -> None:
     paragraphs = list(doc.paragraphs)
     blank_indexes = []
     for idx, paragraph in enumerate(paragraphs):
-        if paragraph.text.strip():
+        if _paragraph_has_content(paragraph):
             continue
         prev_non_blank = None
         next_non_blank = None
         for prev_idx in range(idx - 1, -1, -1):
-            if paragraphs[prev_idx].text.strip():
+            if _paragraph_has_content(paragraphs[prev_idx]):
                 prev_non_blank = paragraphs[prev_idx]
                 break
         for next_idx in range(idx + 1, len(paragraphs)):
-            if paragraphs[next_idx].text.strip():
+            if _paragraph_has_content(paragraphs[next_idx]):
                 next_non_blank = paragraphs[next_idx]
                 break
         if prev_non_blank is None or next_non_blank is None:
@@ -150,6 +191,67 @@ def remove_sources_from_docx(input_path: Path, output_path: Path) -> None:
         blank_indexes.append(idx)
 
     for index in reversed(blank_indexes):
+        _remove_paragraph(paragraphs[index])
+
+    paragraphs = list(doc.paragraphs)
+    timestamp_blank_indexes = []
+    for idx, paragraph in enumerate(paragraphs):
+        if _paragraph_has_content(paragraph):
+            continue
+        if idx == 0 or idx + 1 >= len(paragraphs):
+            continue
+        if _is_timestamp_paragraph(paragraphs[idx - 1]) and _is_timestamp_paragraph(
+            paragraphs[idx + 1]
+        ):
+            timestamp_blank_indexes.append(idx)
+
+    for index in reversed(timestamp_blank_indexes):
+        _remove_paragraph(paragraphs[index])
+
+    paragraphs = list(doc.paragraphs)
+    subtitle_blank_indexes = []
+    current_section: str | None = None
+    for idx, paragraph in enumerate(paragraphs):
+        section = _section_kind(paragraph)
+        if section is not None:
+            current_section = section
+            continue
+        if current_section != "subs":
+            continue
+        if _paragraph_has_content(paragraph):
+            continue
+        prev_non_blank = None
+        next_non_blank = None
+        for prev_idx in range(idx - 1, -1, -1):
+            if _paragraph_has_content(paragraphs[prev_idx]):
+                prev_non_blank = paragraphs[prev_idx]
+                break
+        for next_idx in range(idx + 1, len(paragraphs)):
+            next_section = _section_kind(paragraphs[next_idx])
+            if next_section is not None:
+                break
+            if _paragraph_has_content(paragraphs[next_idx]):
+                next_non_blank = paragraphs[next_idx]
+                break
+        if prev_non_blank is None or next_non_blank is None:
+            continue
+        if prev_non_blank.text.strip() in SUBTITLE_LABELS:
+            continue
+        subtitle_blank_indexes.append(idx)
+
+    for index in reversed(subtitle_blank_indexes):
+        _remove_paragraph(paragraphs[index])
+
+    paragraphs = list(doc.paragraphs)
+    repeated_blank_indexes = []
+    previous_was_blank = False
+    for idx, paragraph in enumerate(paragraphs):
+        is_blank = not _paragraph_has_content(paragraph)
+        if is_blank and previous_was_blank:
+            repeated_blank_indexes.append(idx)
+        previous_was_blank = is_blank
+
+    for index in reversed(repeated_blank_indexes):
         _remove_paragraph(paragraphs[index])
 
     output_path.parent.mkdir(parents=True, exist_ok=True)

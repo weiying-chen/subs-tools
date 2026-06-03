@@ -52,6 +52,21 @@ class CleanSubsTest(unittest.TestCase):
             for name, data in files.items():
                 zout.writestr(name, data)
 
+    def _paragraph_has_drawing(self, paragraph) -> bool:
+        return paragraph._p.find(
+            ".//w:drawing",
+            {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"},
+        ) is not None
+
+    def _extract_sample_image(self, target_dir: Path) -> Path:
+        sample_docx = Path("sample.docx")
+        with ZipFile(sample_docx, "r") as zin:
+            media_name = next(name for name in zin.namelist() if name.startswith("word/media/"))
+            image_bytes = zin.read(media_name)
+        image_path = target_dir / Path(media_name).name
+        image_path.write_bytes(image_bytes)
+        return image_path
+
     def test_removes_indented_paragraphs_and_blank_lines_left_by_removed_blocks(self) -> None:
         temp_dir = Path(tempfile.mkdtemp(prefix="subs_tools_clean_test_"))
         source_path = temp_dir / "input.docx"
@@ -107,7 +122,6 @@ class CleanSubsTest(unittest.TestCase):
             "https://health.businessweekly.com.tw/article/ARTL003018041",
             "Source note A",
             "Source note B",
-            "",
             "XXX\t00:08:29:00\t00:08:43:11\t像梨子汁啊",
             "Juices made from pear and water chestnut.",
         ]
@@ -245,6 +259,139 @@ class CleanSubsTest(unittest.TestCase):
                 "字幕：",
                 "00:00:01:00\t00:00:02:00\t第一句",
                 "00:00:02:00\t00:00:03:00\t第二句",
+            ],
+        )
+
+    def test_removes_blank_lines_between_timestamp_paragraphs(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="subs_tools_clean_test_"))
+        source_path = temp_dir / "input.docx"
+        output_path = temp_dir / "output.docx"
+        self._write_docx(
+            source_path,
+            [
+                "字幕：",
+                "00:00:01:00\t00:00:02:00\t第一句",
+                "",
+                "00:00:02:00\t00:00:03:00\t第二句",
+                "",
+                "00:00:03:00\t00:00:04:00\t第三句",
+                "Not a timestamp line.",
+            ],
+        )
+
+        assert clean_subs is not None
+        clean_subs.remove_sources_from_docx(source_path, output_path)
+
+        texts = [p.text for p in Document(output_path).paragraphs]
+        self.assertEqual(
+            texts,
+            [
+                "字幕：",
+                "00:00:01:00\t00:00:02:00\t第一句",
+                "00:00:02:00\t00:00:03:00\t第二句",
+                "00:00:03:00\t00:00:04:00\t第三句",
+                "Not a timestamp line.",
+            ],
+        )
+
+    def test_collapses_repeated_blank_paragraphs_to_one(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="subs_tools_clean_test_"))
+        source_path = temp_dir / "input.docx"
+        output_path = temp_dir / "output.docx"
+        self._write_docx(
+            source_path,
+            [
+                "選圖：",
+                "",
+                "",
+                "",
+                "Image created with ChatGPT.",
+                "",
+                "",
+                "字幕：",
+            ],
+        )
+
+        assert clean_subs is not None
+        clean_subs.remove_sources_from_docx(source_path, output_path)
+
+        texts = [p.text for p in Document(output_path).paragraphs]
+        self.assertEqual(
+            texts,
+            [
+                "選圖：",
+                "",
+                "Image created with ChatGPT.",
+                "",
+                "字幕：",
+            ],
+        )
+
+    def test_preserves_drawing_only_paragraphs_when_collapsing_blank_lines(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="subs_tools_clean_test_"))
+        source_path = temp_dir / "input.docx"
+        output_path = temp_dir / "output.docx"
+        image_path = self._extract_sample_image(temp_dir)
+
+        doc = Document()
+        doc.add_paragraph("選圖：")
+        image_paragraph = doc.add_paragraph()
+        run = image_paragraph.add_run()
+        run.add_picture(str(image_path))
+        doc.add_paragraph("")
+        doc.add_paragraph("")
+        doc.add_paragraph("字幕：")
+        doc.save(source_path)
+
+        assert clean_subs is not None
+        clean_subs.remove_sources_from_docx(source_path, output_path)
+
+        out_doc = Document(output_path)
+        drawings = [
+            idx
+            for idx, paragraph in enumerate(out_doc.paragraphs)
+            if self._paragraph_has_drawing(paragraph)
+        ]
+        texts = [p.text for p in out_doc.paragraphs]
+        self.assertEqual(drawings, [1])
+        self.assertEqual(
+            texts,
+            [
+                "選圖：",
+                "",
+                "",
+                "字幕：",
+            ],
+        )
+
+    def test_removes_blank_lines_between_subtitle_translation_and_next_timestamp(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="subs_tools_clean_test_"))
+        source_path = temp_dir / "input.docx"
+        output_path = temp_dir / "output.docx"
+        self._write_docx(
+            source_path,
+            [
+                "字幕：",
+                "00:01:38:16\t00:01:40:26\t它裡面是有痰積",
+                "a type of mass caused by phlegm buildup.",
+                "",
+                "00:01:40:26\t00:01:42:25\t這就是肺為貯痰之器",
+                "This is a key TCM concept for lung cancer.",
+            ],
+        )
+
+        assert clean_subs is not None
+        clean_subs.remove_sources_from_docx(source_path, output_path)
+
+        texts = [p.text for p in Document(output_path).paragraphs]
+        self.assertEqual(
+            texts,
+            [
+                "字幕：",
+                "00:01:38:16\t00:01:40:26\t它裡面是有痰積",
+                "a type of mass caused by phlegm buildup.",
+                "00:01:40:26\t00:01:42:25\t這就是肺為貯痰之器",
+                "This is a key TCM concept for lung cancer.",
             ],
         )
 
