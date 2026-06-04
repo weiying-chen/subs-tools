@@ -43,6 +43,99 @@ CHANGE_TAGS = {
     f"{{{WORD_NAMESPACE}}}moveToRangeStart",
     f"{{{WORD_NAMESPACE}}}moveToRangeEnd",
 }
+REVISION_XML_BASENAMES = {
+    "document.xml",
+}
+XMLNS_DECL_RE = re.compile(r'xmlns:([A-Za-z0-9_]+)="([^"]+)"')
+DRAWING_PREFIX_BY_URI = {
+    "http://schemas.openxmlformats.org/drawingml/2006/main": "a",
+    "http://schemas.openxmlformats.org/drawingml/2006/picture": "pic",
+}
+
+
+def _should_accept_revisions_in_part(filename: str) -> bool:
+    if not filename.startswith("word/") or not filename.endswith(".xml"):
+        return False
+    basename = Path(filename).name
+    if basename in REVISION_XML_BASENAMES:
+        return True
+    return basename.startswith("header") or basename.startswith("footer")
+
+
+def _first_root_tag(xml_text: str) -> str:
+    match = re.search(r"<[^?][^>]*>", xml_text)
+    if match is None:
+        raise ValueError("No root tag found.")
+    return match.group(0)
+
+
+def _namespace_prefixes(root_tag: str) -> dict[str, str]:
+    return {uri: prefix for prefix, uri in XMLNS_DECL_RE.findall(root_tag)}
+
+
+def _ensure_root_namespace(root_tag: str, prefix: str, uri: str) -> str:
+    if f"xmlns:{prefix}=" in root_tag:
+        return root_tag
+    return root_tag.replace(">", f' xmlns:{prefix}="{uri}">', 1)
+
+
+def _normalize_xml_part_against_original(
+    cleaned_xml: bytes,
+    original_xml: bytes,
+) -> bytes:
+    cleaned_text = cleaned_xml.decode("utf-8")
+    original_text = original_xml.decode("utf-8")
+    cleaned_root = _first_root_tag(cleaned_text)
+    original_root = _first_root_tag(original_text)
+
+    desired_prefix_by_uri = _namespace_prefixes(original_root)
+    desired_prefix_by_uri.update(DRAWING_PREFIX_BY_URI)
+
+    normalized_root = original_root
+    for uri, prefix in DRAWING_PREFIX_BY_URI.items():
+        normalized_root = _ensure_root_namespace(normalized_root, prefix, uri)
+
+    body = cleaned_text[len(cleaned_root) :]
+    for uri, current_prefix in _namespace_prefixes(cleaned_root).items():
+        desired_prefix = desired_prefix_by_uri.get(uri)
+        if not desired_prefix or desired_prefix == current_prefix:
+            continue
+        body = re.sub(
+            rf"(</?){re.escape(current_prefix)}:",
+            lambda match: f"{match.group(1)}{desired_prefix}:",
+            body,
+        )
+        body = re.sub(
+            rf"(\s){re.escape(current_prefix)}:",
+            lambda match: f"{match.group(1)}{desired_prefix}:",
+            body,
+        )
+
+    return (normalized_root + body).encode("utf-8")
+
+
+def _write_cleaned_package(
+    *,
+    input_path: Path,
+    temp_output_path: Path,
+    output_path: Path,
+) -> None:
+    final_temp_path = output_path.with_suffix(output_path.suffix + ".finaltmp")
+    with ZipFile(input_path, "r") as zin, ZipFile(temp_output_path, "r") as ztemp:
+        temp_names = set(ztemp.namelist())
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        with ZipFile(final_temp_path, "w", compression=ZIP_DEFLATED) as zout:
+            for info in zin.infolist():
+                data = zin.read(info.filename)
+                if _should_accept_revisions_in_part(info.filename) and info.filename in temp_names:
+                    data = ztemp.read(info.filename)
+                    if info.filename == "word/document.xml":
+                        data = _normalize_xml_part_against_original(
+                            data,
+                            zin.read(info.filename),
+                        )
+                zout.writestr(info, data)
+    final_temp_path.replace(output_path)
 
 
 def _remove_paragraph(paragraph) -> None:
@@ -129,7 +222,7 @@ def _accepted_revisions_docx_bytes(input_path: Path) -> bytes:
     with ZipFile(input_path, "r") as zin, ZipFile(buffer, "w", compression=ZIP_DEFLATED) as zout:
         for info in zin.infolist():
             data = zin.read(info.filename)
-            if info.filename.startswith("word/") and info.filename.endswith(".xml"):
+            if _should_accept_revisions_in_part(info.filename):
                 root = ET.fromstring(data)
                 _accept_revisions_in_tree(root)
                 data = ET.tostring(root, encoding="utf-8", xml_declaration=True)
@@ -254,8 +347,14 @@ def remove_sources_from_docx(input_path: Path, output_path: Path) -> None:
     for index in reversed(repeated_blank_indexes):
         _remove_paragraph(paragraphs[index])
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    doc.save(str(output_path))
+    temp_output_path = output_path.with_suffix(output_path.suffix + ".tmp")
+    doc.save(str(temp_output_path))
+    _write_cleaned_package(
+        input_path=input_path,
+        temp_output_path=temp_output_path,
+        output_path=output_path,
+    )
+    temp_output_path.unlink()
 
 
 def _resolve_output_path(input_path: Path, output_path: str | None) -> Path:

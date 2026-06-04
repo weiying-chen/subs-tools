@@ -1,3 +1,4 @@
+from io import BytesIO
 import tempfile
 import unittest
 from pathlib import Path
@@ -59,12 +60,14 @@ class CleanSubsTest(unittest.TestCase):
         ) is not None
 
     def _extract_sample_image(self, target_dir: Path) -> Path:
-        sample_docx = Path("sample.docx")
-        with ZipFile(sample_docx, "r") as zin:
-            media_name = next(name for name in zin.namelist() if name.startswith("word/media/"))
-            image_bytes = zin.read(media_name)
-        image_path = target_dir / Path(media_name).name
-        image_path.write_bytes(image_bytes)
+        image_path = target_dir / "sample.png"
+        image_path.write_bytes(
+            b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
+            b"\x00\x00\x00\x01\x00\x00\x00\x01\x08\x02"
+            b"\x00\x00\x00\x90wS\xde\x00\x00\x00\x0cIDAT"
+            b"\x08\xd7c\xf8\xff\xff?\x00\x05\xfe\x02\xfe"
+            b"\xdc\xccY\xe7\x00\x00\x00\x00IEND\xaeB`\x82"
+        )
         return image_path
 
     def test_removes_indented_paragraphs_and_blank_lines_left_by_removed_blocks(self) -> None:
@@ -185,6 +188,57 @@ class CleanSubsTest(unittest.TestCase):
         self.assertEqual(len(xml_root.findall(".//w:del", self.NS)), 0)
         self.assertEqual(len(xml_root.findall(".//w:moveFrom", self.NS)), 0)
         self.assertEqual(len(xml_root.findall(".//w:moveTo", self.NS)), 0)
+
+    def test_preserves_font_table_xml_bytes(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="subs_tools_clean_test_"))
+        source_path = temp_dir / "input.docx"
+        output_path = temp_dir / "output.docx"
+        self._write_docx(source_path, ["Line"])
+
+        with ZipFile(source_path, "r") as zin:
+            files = {info.filename: zin.read(info.filename) for info in zin.infolist()}
+
+        custom_font_table = (
+            b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            b'<w:fonts xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" '
+            b'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '
+            b'xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml" '
+            b'xmlns:w15="http://schemas.microsoft.com/office/word/2012/wordml" '
+            b'xmlns:w16se="http://schemas.microsoft.com/office/word/2015/wordml/symex" '
+            b'mc:Ignorable="w14 w15 w16se"><w:font w:name="Calibri"/></w:fonts>'
+        )
+        files["word/fontTable.xml"] = custom_font_table
+
+        with ZipFile(source_path, "w", compression=ZIP_DEFLATED) as zout:
+            for name, data in files.items():
+                zout.writestr(name, data)
+
+        assert clean_subs is not None
+        clean_subs.remove_sources_from_docx(source_path, output_path)
+        with ZipFile(output_path, "r") as zout:
+            self.assertEqual(zout.read("word/fontTable.xml"), custom_font_table)
+
+    def test_preserves_non_content_package_xml_bytes(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="subs_tools_clean_test_"))
+        source_path = temp_dir / "input.docx"
+        output_path = temp_dir / "output.docx"
+        self._write_docx(source_path, ["字幕：", "00:00:01:00\t00:00:02:00\t第一句"])
+
+        tracked_parts = [
+            "word/fontTable.xml",
+            "word/styles.xml",
+            "word/settings.xml",
+            "word/webSettings.xml",
+        ]
+        with ZipFile(source_path, "r") as zin:
+            original_parts = {name: zin.read(name) for name in tracked_parts}
+
+        assert clean_subs is not None
+        clean_subs.remove_sources_from_docx(source_path, output_path)
+
+        with ZipFile(output_path, "r") as zout:
+            for name, original_bytes in original_parts.items():
+                self.assertEqual(zout.read(name), original_bytes)
 
     def test_accepts_inserted_indented_blocks_before_indent_cleanup(self) -> None:
         temp_dir = Path(tempfile.mkdtemp(prefix="subs_tools_clean_test_"))
