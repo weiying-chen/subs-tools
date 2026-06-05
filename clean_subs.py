@@ -10,6 +10,8 @@ from zipfile import ZIP_DEFLATED, ZipFile
 import xml.etree.ElementTree as ET
 
 from docx import Document
+from docx.enum.text import WD_COLOR_INDEX
+from docx.oxml.ns import qn
 
 
 INDENT_THRESHOLD_PT = 21.0
@@ -149,6 +151,14 @@ def _normalize_xml_part_against_original(
     return (normalized_root + body).encode("utf-8")
 
 
+def _strip_run_shading_xml(xml_bytes: bytes) -> bytes:
+    root = ET.fromstring(xml_bytes)
+    for rpr in root.findall(f".//{{{WORD_NAMESPACE}}}rPr"):
+        for shd in list(rpr.findall(f"{{{WORD_NAMESPACE}}}shd")):
+            rpr.remove(shd)
+    return ET.tostring(root, encoding="utf-8", xml_declaration=True)
+
+
 def _write_cleaned_package(
     *,
     input_path: Path,
@@ -164,6 +174,7 @@ def _write_cleaned_package(
                 data = zin.read(info.filename)
                 if _should_accept_revisions_in_part(info.filename) and info.filename in temp_names:
                     data = ztemp.read(info.filename)
+                    data = _strip_run_shading_xml(data)
                     if info.filename == "word/document.xml":
                         data = _normalize_xml_part_against_original(
                             data,
@@ -250,6 +261,40 @@ def _section_kind(paragraph) -> str | None:
     return None
 
 
+def _should_restore_yellow_highlight(paragraph) -> bool:
+    text = paragraph.text.strip()
+    if not text:
+        return False
+    if not (text.startswith("(") or text.endswith(")")):
+        return False
+    return any(run.font.highlight_color == WD_COLOR_INDEX.YELLOW for run in paragraph.runs)
+
+
+def _normalize_highlights(doc: Document) -> None:
+    had_yellow = [
+        any(run.font.highlight_color == WD_COLOR_INDEX.YELLOW for run in paragraph.runs)
+        for paragraph in doc.paragraphs
+    ]
+    paragraphs_to_restore: set[int] = set()
+    for idx, paragraph in enumerate(doc.paragraphs):
+        if _should_restore_yellow_highlight(paragraph):
+            paragraphs_to_restore.add(idx)
+            if idx > 0 and had_yellow[idx - 1]:
+                paragraphs_to_restore.add(idx - 1)
+        for run in paragraph.runs:
+            rpr = run._r.rPr
+            if rpr is not None:
+                for shd in list(rpr.findall(qn("w:shd"))):
+                    rpr.remove(shd)
+            if run.font.highlight_color is not None:
+                run.font.highlight_color = None
+
+    for idx in sorted(paragraphs_to_restore):
+        paragraph = doc.paragraphs[idx]
+        for run in paragraph.runs:
+            run.font.highlight_color = WD_COLOR_INDEX.YELLOW
+
+
 def _rewrite_revision_children(element) -> bool:
     changed = False
     idx = 0
@@ -294,6 +339,7 @@ def _accepted_revisions_docx_bytes(input_path: Path) -> bytes:
 
 def remove_sources_from_docx(input_path: Path, output_path: Path) -> None:
     doc = Document(BytesIO(_accepted_revisions_docx_bytes(input_path)))
+    _normalize_highlights(doc)
     paragraphs = list(doc.paragraphs)
     remove_indexes = {
         idx
