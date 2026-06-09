@@ -30,7 +30,7 @@ SECTION_LABELS = {
 }
 SUBTITLE_LABELS = {"字幕：", "字幕:"}
 WORD_NAMESPACE = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
-NEUTRAL_SHADING_FILLS = {"", "AUTO", "FFFFFF"}
+OFFICE_DRAWING_NAMESPACE = "http://schemas.microsoft.com/office/drawing/2010/main"
 INSERTION_TAGS = {f"{{{WORD_NAMESPACE}}}ins", f"{{{WORD_NAMESPACE}}}moveTo"}
 DELETION_TAGS = {f"{{{WORD_NAMESPACE}}}del", f"{{{WORD_NAMESPACE}}}moveFrom"}
 CHANGE_TAGS = {
@@ -61,6 +61,16 @@ def _should_accept_revisions_in_part(filename: str) -> bool:
     if basename in REVISION_XML_BASENAMES:
         return True
     return basename.startswith("header") or basename.startswith("footer")
+
+
+def _repair_word_xml_namespaces(xml_data: bytes) -> bytes:
+    if b"ns6:useLocalDpi" not in xml_data or b"xmlns:ns6=" in xml_data:
+        return xml_data
+    return xml_data.replace(
+        b"<w:document ",
+        f'<w:document xmlns:ns6="{OFFICE_DRAWING_NAMESPACE}" '.encode("utf-8"),
+        1,
+    )
 
 
 def _first_root_tag(xml_text: str) -> str:
@@ -97,6 +107,12 @@ def _normalize_xml_part_against_original(
         normalized_root = _ensure_root_namespace(normalized_root, prefix, uri)
 
     body = cleaned_text[len(cleaned_root) :]
+    if "ns6:" in body:
+        normalized_root = _ensure_root_namespace(
+            normalized_root,
+            "ns6",
+            OFFICE_DRAWING_NAMESPACE,
+        )
     for uri, current_prefix in _namespace_prefixes(cleaned_root).items():
         desired_prefix = desired_prefix_by_uri.get(uri)
         if not desired_prefix or desired_prefix == current_prefix:
@@ -146,6 +162,19 @@ def _remove_paragraph(paragraph) -> None:
         parent.remove(element)
 
 
+def _remove_element(element) -> None:
+    parent = element.getparent()
+    if parent is not None:
+        parent.remove(element)
+
+
+def _strip_source_marking_formatting(doc: Document) -> None:
+    for element in list(doc._element.findall(".//w:highlight", {"w": WORD_NAMESPACE})):
+        _remove_element(element)
+    for element in list(doc._element.findall(".//w:shd", {"w": WORD_NAMESPACE})):
+        _remove_element(element)
+
+
 def _left_indent_pt(paragraph) -> float | None:
     indent = paragraph.paragraph_format.left_indent
     if indent is not None:
@@ -164,16 +193,6 @@ def _is_indented_content_paragraph(paragraph) -> bool:
         return False
     left_indent = _left_indent_pt(paragraph)
     return left_indent is not None and left_indent >= INDENT_THRESHOLD_PT
-
-
-def _paragraph_has_source_shading(paragraph) -> bool:
-    if not paragraph.text.strip():
-        return False
-    for shading in paragraph._p.findall(".//w:shd", {"w": WORD_NAMESPACE}):
-        fill = shading.get(f"{{{WORD_NAMESPACE}}}fill", "").upper()
-        if fill not in NEUTRAL_SHADING_FILLS:
-            return True
-    return False
 
 
 def _is_timestamp_paragraph(paragraph) -> bool:
@@ -234,6 +253,7 @@ def _accepted_revisions_docx_bytes(input_path: Path) -> bytes:
         for info in zin.infolist():
             data = zin.read(info.filename)
             if _should_accept_revisions_in_part(info.filename):
+                data = _repair_word_xml_namespaces(data)
                 root = ET.fromstring(data)
                 _accept_revisions_in_tree(root)
                 data = ET.tostring(root, encoding="utf-8", xml_declaration=True)
@@ -247,7 +267,7 @@ def remove_sources_from_docx(input_path: Path, output_path: Path) -> None:
     remove_indexes = {
         idx
         for idx, paragraph in enumerate(paragraphs)
-        if _is_indented_content_paragraph(paragraph) or _paragraph_has_source_shading(paragraph)
+        if _is_indented_content_paragraph(paragraph)
     }
     if remove_indexes:
         block_starts = sorted(remove_indexes)
@@ -359,6 +379,8 @@ def remove_sources_from_docx(input_path: Path, output_path: Path) -> None:
 
     for index in reversed(repeated_blank_indexes):
         _remove_paragraph(paragraphs[index])
+
+    _strip_source_marking_formatting(doc)
 
     temp_output_path = output_path.with_suffix(output_path.suffix + ".tmp")
     doc.save(str(temp_output_path))
