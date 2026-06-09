@@ -97,6 +97,34 @@ class CleanSubsCliTest(unittest.TestCase):
                 self.assertFalse(paragraph._p.findall(".//w:shd", {"w": clean_subs.WORD_NAMESPACE}))
                 self.assertFalse(paragraph._p.findall(".//w:highlight", {"w": clean_subs.WORD_NAMESPACE}))
 
+    def test_remove_sources_strips_intro_marking_formatting(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "input.docx"
+            output_path = Path(tmp_dir) / "output.docx"
+            doc = Document()
+            summary = doc.add_paragraph()
+            summary_run = summary.add_run("(1)04:10-06:52 (2m42s)")
+            _highlight_run(summary_run, "yellow")
+            doc.add_paragraph("簡介：")
+            shaded = doc.add_paragraph("keep intro shaded text")
+            _shade_paragraph(shaded, "FF0000")
+            highlighted = doc.add_paragraph()
+            run = highlighted.add_run("keep intro highlighted text")
+            _highlight_run(run, "yellow")
+            doc.save(input_path)
+
+            clean_subs.remove_sources_from_docx(input_path, output_path)
+
+            output_doc = Document(output_path)
+            cleaned_text = "\n".join(paragraph.text for paragraph in output_doc.paragraphs)
+            self.assertIn("(1)04:10-06:52 (2m42s)", cleaned_text)
+            self.assertIn("keep intro shaded text", cleaned_text)
+            self.assertIn("keep intro highlighted text", cleaned_text)
+            self.assertTrue(output_doc.paragraphs[0]._p.findall(".//w:highlight", {"w": clean_subs.WORD_NAMESPACE}))
+            for paragraph in output_doc.paragraphs[2:]:
+                self.assertFalse(paragraph._p.findall(".//w:shd", {"w": clean_subs.WORD_NAMESPACE}))
+                self.assertFalse(paragraph._p.findall(".//w:highlight", {"w": clean_subs.WORD_NAMESPACE}))
+
     def test_repair_missing_use_local_dpi_namespace(self):
         broken_xml = (
             b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'

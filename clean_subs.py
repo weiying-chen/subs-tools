@@ -29,6 +29,7 @@ SECTION_LABELS = {
     "字幕:",
 }
 SUBTITLE_LABELS = {"字幕：", "字幕:"}
+MARKING_CLEANUP_LABELS = {"簡介：", "簡介:", "字幕：", "字幕:"}
 WORD_NAMESPACE = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 OFFICE_DRAWING_NAMESPACE = "http://schemas.microsoft.com/office/drawing/2010/main"
 INSERTION_TAGS = {f"{{{WORD_NAMESPACE}}}ins", f"{{{WORD_NAMESPACE}}}moveTo"}
@@ -195,13 +196,13 @@ def _strip_paragraph_marking_formatting(paragraph) -> None:
 
 
 def _strip_source_marking_formatting(paragraphs) -> None:
-    in_subtitles = False
+    in_cleanup_section = False
     for paragraph in paragraphs:
-        section = _section_kind(paragraph)
-        if section is not None:
-            in_subtitles = section == "subs"
+        text = paragraph.text.strip()
+        if text in SECTION_LABELS:
+            in_cleanup_section = text in MARKING_CLEANUP_LABELS
             continue
-        if in_subtitles:
+        if in_cleanup_section:
             _strip_paragraph_marking_formatting(paragraph)
 
 
