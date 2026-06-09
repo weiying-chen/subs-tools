@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/home/weiying/python/word/.venv/bin/python
 
 from __future__ import annotations
 
@@ -363,11 +363,32 @@ def _resolve_output_path(input_path: Path, output_path: str | None) -> Path:
     return input_path
 
 
+def _is_current_directory_docx(path: Path) -> bool:
+    return path.is_file() and path.suffix.lower() == ".docx" and not path.name.startswith("~$")
+
+
+def _resolve_input_paths(docx_files: list[str]) -> list[Path]:
+    if docx_files:
+        return [Path(raw_path) for raw_path in docx_files]
+    return sorted(
+        (
+            path
+            for path in Path.cwd().iterdir()
+            if _is_current_directory_docx(path)
+        ),
+        key=lambda path: path.name.lower(),
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Write cleaned DOCX files."
     )
-    parser.add_argument("docx_files", nargs="+", help="Input DOCX file paths.")
+    parser.add_argument(
+        "docx_files",
+        nargs="*",
+        help="Input DOCX file paths. Default: all DOCX files in the current directory.",
+    )
     parser.add_argument(
         "--output",
         help="Write cleaned content to a separate DOCX path. Default: overwrite input.",
@@ -375,12 +396,16 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.output and len(args.docx_files) != 1:
-        parser.error("--output requires exactly one input DOCX file.")
+        parser.error("--output requires exactly one explicit input DOCX file.")
 
-    for raw_path in args.docx_files:
-        input_path = Path(raw_path)
+    input_paths = _resolve_input_paths(args.docx_files)
+    if not input_paths:
+        parser.error("no DOCX files found in the current directory.")
+
+    for input_path in input_paths:
         output_path = _resolve_output_path(input_path, args.output)
         remove_sources_from_docx(input_path, output_path)
+        print(f"[cleaned] {output_path}")
 
 
 if __name__ == "__main__":
