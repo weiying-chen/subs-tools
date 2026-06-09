@@ -44,6 +44,7 @@ CHANGE_TAGS = {
     f"{{{WORD_NAMESPACE}}}moveToRangeStart",
     f"{{{WORD_NAMESPACE}}}moveToRangeEnd",
 }
+TRACK_REVISIONS_TAG = f"{{{WORD_NAMESPACE}}}trackRevisions"
 REVISION_XML_BASENAMES = {
     "document.xml",
 }
@@ -71,6 +72,22 @@ def _repair_word_xml_namespaces(xml_data: bytes) -> bytes:
         f'<w:document xmlns:ns6="{OFFICE_DRAWING_NAMESPACE}" '.encode("utf-8"),
         1,
     )
+
+
+def _remove_track_revisions(xml_data: bytes) -> bytes:
+    root = ET.fromstring(xml_data)
+    for element in list(root.iter(TRACK_REVISIONS_TAG)):
+        parent = _find_parent(root, element)
+        if parent is not None:
+            parent.remove(element)
+    return ET.tostring(root, encoding="utf-8", xml_declaration=True)
+
+
+def _find_parent(root, target):
+    for parent in root.iter():
+        if target in list(parent):
+            return parent
+    return None
 
 
 def _first_root_tag(xml_text: str) -> str:
@@ -151,6 +168,8 @@ def _write_cleaned_package(
                             data,
                             zin.read(info.filename),
                         )
+                elif info.filename == "word/settings.xml":
+                    data = _remove_track_revisions(data)
                 zout.writestr(info, data)
     final_temp_path.replace(output_path)
 
@@ -168,11 +187,22 @@ def _remove_element(element) -> None:
         parent.remove(element)
 
 
-def _strip_source_marking_formatting(doc: Document) -> None:
-    for element in list(doc._element.findall(".//w:highlight", {"w": WORD_NAMESPACE})):
+def _strip_paragraph_marking_formatting(paragraph) -> None:
+    for element in list(paragraph._p.findall(".//w:highlight", {"w": WORD_NAMESPACE})):
         _remove_element(element)
-    for element in list(doc._element.findall(".//w:shd", {"w": WORD_NAMESPACE})):
+    for element in list(paragraph._p.findall(".//w:shd", {"w": WORD_NAMESPACE})):
         _remove_element(element)
+
+
+def _strip_source_marking_formatting(paragraphs) -> None:
+    in_subtitles = False
+    for paragraph in paragraphs:
+        section = _section_kind(paragraph)
+        if section is not None:
+            in_subtitles = section == "subs"
+            continue
+        if in_subtitles:
+            _strip_paragraph_marking_formatting(paragraph)
 
 
 def _left_indent_pt(paragraph) -> float | None:
@@ -380,7 +410,7 @@ def remove_sources_from_docx(input_path: Path, output_path: Path) -> None:
     for index in reversed(repeated_blank_indexes):
         _remove_paragraph(paragraphs[index])
 
-    _strip_source_marking_formatting(doc)
+    _strip_source_marking_formatting(doc.paragraphs)
 
     temp_output_path = output_path.with_suffix(output_path.suffix + ".tmp")
     doc.save(str(temp_output_path))

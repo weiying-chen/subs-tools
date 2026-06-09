@@ -2,6 +2,7 @@ from pathlib import Path
 import tempfile
 import unittest
 from unittest import mock
+from zipfile import ZIP_DEFLATED, ZipFile
 
 import clean_subs
 from docx import Document
@@ -73,6 +74,10 @@ class CleanSubsCliTest(unittest.TestCase):
             input_path = Path(tmp_dir) / "input.docx"
             output_path = Path(tmp_dir) / "output.docx"
             doc = Document()
+            summary = doc.add_paragraph()
+            summary_run = summary.add_run("(1)04:10-06:52 (2m42s)")
+            _highlight_run(summary_run, "yellow")
+            doc.add_paragraph("字幕：")
             shaded = doc.add_paragraph("keep shaded text")
             _shade_paragraph(shaded, "FF0000")
             highlighted = doc.add_paragraph()
@@ -84,14 +89,13 @@ class CleanSubsCliTest(unittest.TestCase):
 
             output_doc = Document(output_path)
             cleaned_text = "\n".join(paragraph.text for paragraph in output_doc.paragraphs)
+            self.assertIn("(1)04:10-06:52 (2m42s)", cleaned_text)
             self.assertIn("keep shaded text", cleaned_text)
             self.assertIn("keep highlighted text", cleaned_text)
-            self.assertFalse(
-                output_doc._element.findall(".//w:shd", {"w": clean_subs.WORD_NAMESPACE})
-            )
-            self.assertFalse(
-                output_doc._element.findall(".//w:highlight", {"w": clean_subs.WORD_NAMESPACE})
-            )
+            self.assertTrue(output_doc.paragraphs[0]._p.findall(".//w:highlight", {"w": clean_subs.WORD_NAMESPACE}))
+            for paragraph in output_doc.paragraphs[2:]:
+                self.assertFalse(paragraph._p.findall(".//w:shd", {"w": clean_subs.WORD_NAMESPACE}))
+                self.assertFalse(paragraph._p.findall(".//w:highlight", {"w": clean_subs.WORD_NAMESPACE}))
 
     def test_repair_missing_use_local_dpi_namespace(self):
         broken_xml = (
@@ -122,6 +126,28 @@ class CleanSubsCliTest(unittest.TestCase):
         )
 
         self.assertIn(b'xmlns:ns6="http://schemas.microsoft.com/office/drawing/2010/main"', normalized_xml)
+
+    def test_remove_sources_turns_off_track_changes(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "input.docx"
+            output_path = Path(tmp_dir) / "output.docx"
+            doc = Document()
+            doc.add_paragraph("keep this line")
+            doc.save(input_path)
+
+            with ZipFile(input_path, "a", compression=ZIP_DEFLATED) as docx:
+                settings_xml = docx.read("word/settings.xml")
+                settings_xml = settings_xml.replace(
+                    b"<w:defaultTabStop",
+                    b"<w:trackRevisions/><w:defaultTabStop",
+                    1,
+                )
+                docx.writestr("word/settings.xml", settings_xml)
+
+            clean_subs.remove_sources_from_docx(input_path, output_path)
+
+            with ZipFile(output_path, "r") as docx:
+                self.assertNotIn(b"<w:trackRevisions", docx.read("word/settings.xml"))
 
 
 if __name__ == "__main__":
