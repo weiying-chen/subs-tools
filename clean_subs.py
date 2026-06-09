@@ -30,6 +30,7 @@ SECTION_LABELS = {
 }
 SUBTITLE_LABELS = {"字幕：", "字幕:"}
 WORD_NAMESPACE = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+NEUTRAL_SHADING_FILLS = {"", "AUTO", "FFFFFF"}
 INSERTION_TAGS = {f"{{{WORD_NAMESPACE}}}ins", f"{{{WORD_NAMESPACE}}}moveTo"}
 DELETION_TAGS = {f"{{{WORD_NAMESPACE}}}del", f"{{{WORD_NAMESPACE}}}moveFrom"}
 CHANGE_TAGS = {
@@ -165,6 +166,16 @@ def _is_indented_content_paragraph(paragraph) -> bool:
     return left_indent is not None and left_indent >= INDENT_THRESHOLD_PT
 
 
+def _paragraph_has_source_shading(paragraph) -> bool:
+    if not paragraph.text.strip():
+        return False
+    for shading in paragraph._p.findall(".//w:shd", {"w": WORD_NAMESPACE}):
+        fill = shading.get(f"{{{WORD_NAMESPACE}}}fill", "").upper()
+        if fill not in NEUTRAL_SHADING_FILLS:
+            return True
+    return False
+
+
 def _is_timestamp_paragraph(paragraph) -> bool:
     return bool(TIMESTAMP_LINE_RE.match(paragraph.text.strip()))
 
@@ -234,7 +245,9 @@ def remove_sources_from_docx(input_path: Path, output_path: Path) -> None:
     doc = Document(BytesIO(_accepted_revisions_docx_bytes(input_path)))
     paragraphs = list(doc.paragraphs)
     remove_indexes = {
-        idx for idx, paragraph in enumerate(paragraphs) if _is_indented_content_paragraph(paragraph)
+        idx
+        for idx, paragraph in enumerate(paragraphs)
+        if _is_indented_content_paragraph(paragraph) or _paragraph_has_source_shading(paragraph)
     }
     if remove_indexes:
         block_starts = sorted(remove_indexes)
