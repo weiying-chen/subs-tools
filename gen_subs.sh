@@ -27,7 +27,9 @@ TARGET_DIR="${1:-.}"
 SCRIPT_PATH="${GENERATE_SUBS_SCRIPT:-$HOME/python/word/generate_subs.py}"
 PYTHON_BIN="${GENERATE_SUBS_PYTHON:-$HOME/python/word/.venv/bin/python}"
 TEMPLATE_PATH="${GENERATE_SUBS_TEMPLATE:-$HOME/python/word/templates/subs_template.docx}"
-CROP_SCRIPT_PATH="${GENERATE_SUBS_CROP_SCRIPT:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/crop_subs.py}"
+SELF_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
+CROP_SCRIPT_DIR="$(cd "$(dirname "$SELF_PATH")" && pwd)"
+CROP_SCRIPT_PATH="${GENERATE_SUBS_CROP_SCRIPT:-$CROP_SCRIPT_DIR/crop_subs.py}"
 OUTPUT_DIR="${TARGET_DIR%/}/output"
 
 if [[ ! -d "$TARGET_DIR" ]]; then
