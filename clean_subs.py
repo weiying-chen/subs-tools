@@ -3,28 +3,11 @@
 from __future__ import annotations
 
 import argparse
-import os
-import sys
 from io import BytesIO
 from pathlib import Path
 import re
 from zipfile import ZIP_DEFLATED, ZipFile
 import xml.etree.ElementTree as ET
-
-def _reexec_with_repo_venv() -> None:
-    repo_root = Path(__file__).resolve().parent
-    venv_python = repo_root / ".venv" / "bin" / "python"
-    if not venv_python.exists():
-        return
-    if Path(sys.executable).resolve() == venv_python.resolve():
-        return
-    os.execv(
-        str(venv_python),
-        [str(venv_python), str(Path(__file__).resolve()), *sys.argv[1:]],
-    )
-
-
-_reexec_with_repo_venv()
 
 from docx import Document
 from docx.enum.text import WD_COLOR_INDEX
