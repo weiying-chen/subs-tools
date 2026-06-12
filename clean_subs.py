@@ -31,7 +31,6 @@ SECTION_LABELS = {
     "字幕:",
 }
 SUBTITLE_LABELS = {"字幕：", "字幕:"}
-MARKING_CLEANUP_LABELS = {"簡介：", "簡介:", "字幕：", "字幕:"}
 WORD_NAMESPACE = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 OFFICE_DRAWING_NAMESPACE = "http://schemas.microsoft.com/office/drawing/2010/main"
 INSERTION_TAGS = {f"{{{WORD_NAMESPACE}}}ins", f"{{{WORD_NAMESPACE}}}moveTo"}
@@ -153,10 +152,40 @@ def _normalize_xml_part_against_original(
 
 def _strip_run_shading_xml(xml_bytes: bytes) -> bytes:
     root = ET.fromstring(xml_bytes)
-    for rpr in root.findall(f".//{{{WORD_NAMESPACE}}}rPr"):
-        for shd in list(rpr.findall(f"{{{WORD_NAMESPACE}}}shd")):
-            rpr.remove(shd)
+    for shd in list(root.findall(f".//{{{WORD_NAMESPACE}}}shd")):
+        _remove_element_from_tree(root, shd)
     return ET.tostring(root, encoding="utf-8", xml_declaration=True)
+
+
+def _remove_element_from_tree(root, element) -> None:
+    parent = _find_parent(root, element)
+    if parent is not None:
+        parent.remove(element)
+
+
+def _run_has_only_breaks(run) -> bool:
+    has_break = False
+    for child in list(run):
+        if child.tag == f"{{{WORD_NAMESPACE}}}br" or child.tag == f"{{{WORD_NAMESPACE}}}cr":
+            has_break = True
+            continue
+        if child.tag == f"{{{WORD_NAMESPACE}}}rPr":
+            continue
+        return False
+    return has_break
+
+
+def _strip_leading_break_runs(root) -> None:
+    for paragraph in root.findall(f".//{{{WORD_NAMESPACE}}}body/{{{WORD_NAMESPACE}}}p"):
+        first_index = 0
+        while first_index < len(paragraph) and paragraph[first_index].tag == f"{{{WORD_NAMESPACE}}}pPr":
+            first_index += 1
+        while (
+            first_index < len(paragraph)
+            and paragraph[first_index].tag == f"{{{WORD_NAMESPACE}}}r"
+            and _run_has_only_breaks(paragraph[first_index])
+        ):
+            paragraph.remove(paragraph[first_index])
 
 
 def _write_cleaned_package(
@@ -204,17 +233,6 @@ def _strip_paragraph_marking_formatting(paragraph) -> None:
         _remove_element(element)
     for element in list(paragraph._p.findall(".//w:shd", {"w": WORD_NAMESPACE})):
         _remove_element(element)
-
-
-def _strip_source_marking_formatting(paragraphs) -> None:
-    in_cleanup_section = False
-    for paragraph in paragraphs:
-        text = paragraph.text.strip()
-        if text in SECTION_LABELS:
-            in_cleanup_section = text in MARKING_CLEANUP_LABELS
-            continue
-        if in_cleanup_section:
-            _strip_paragraph_marking_formatting(paragraph)
 
 
 def _left_indent_pt(paragraph) -> float | None:
@@ -332,6 +350,7 @@ def _accepted_revisions_docx_bytes(input_path: Path) -> bytes:
                 data = _repair_word_xml_namespaces(data)
                 root = ET.fromstring(data)
                 _accept_revisions_in_tree(root)
+                _strip_leading_break_runs(root)
                 data = ET.tostring(root, encoding="utf-8", xml_declaration=True)
             zout.writestr(info, data)
     return buffer.getvalue()
@@ -456,8 +475,6 @@ def remove_sources_from_docx(input_path: Path, output_path: Path) -> None:
 
     for index in reversed(repeated_blank_indexes):
         _remove_paragraph(paragraphs[index])
-
-    _strip_source_marking_formatting(doc.paragraphs)
 
     temp_output_path = output_path.with_suffix(output_path.suffix + ".tmp")
     doc.save(str(temp_output_path))

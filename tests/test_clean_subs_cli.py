@@ -1,8 +1,10 @@
+from io import BytesIO
 from pathlib import Path
 import tempfile
 import unittest
 from unittest import mock
 from zipfile import ZIP_DEFLATED, ZipFile
+import xml.etree.ElementTree as ET
 
 import clean_subs
 from docx import Document
@@ -176,6 +178,20 @@ class CleanSubsCliTest(unittest.TestCase):
 
             with ZipFile(output_path, "r") as docx:
                 self.assertNotIn(b"<w:trackRevisions", docx.read("word/settings.xml"))
+
+    def test_accepting_revisions_drops_leading_inserted_break_runs(self):
+        root = ET.fromstring(
+            b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            b'<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+            b"<w:body><w:p><w:pPr/><w:r><w:cr/></w:r><w:r><w:t>Summary text</w:t></w:r></w:p></w:body></w:document>"
+        )
+
+        clean_subs._strip_leading_break_runs(root)
+
+        ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+        paragraph = root.find(".//w:body/w:p", ns)
+        self.assertEqual(len(paragraph.findall("w:r", ns)), 1)
+        self.assertEqual("".join(t.text or "" for t in paragraph.findall(".//w:t", ns)), "Summary text")
 
 
 if __name__ == "__main__":

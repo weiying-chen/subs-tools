@@ -179,6 +179,52 @@ class CleanSubsHighlightTest(unittest.TestCase):
             [WD_COLOR_INDEX.YELLOW, WD_COLOR_INDEX.YELLOW, WD_COLOR_INDEX.YELLOW],
         )
 
+    def test_preserves_yellow_timestamp_and_parenthesis_note_inside_subtitle_section(
+        self,
+    ) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="subs_tools_clean_test_"))
+        source_path = temp_dir / "input.docx"
+        output_path = temp_dir / "output.docx"
+        self._write_docx_with_highlights(
+            source_path,
+            [
+                [("字幕：", None)],
+                [
+                    ("00:00:20:00", WD_COLOR_INDEX.YELLOW),
+                    ("\t", None),
+                    ("00:00:26:00", WD_COLOR_INDEX.YELLOW),
+                    ("\t", None),
+                    ("黃崑祥", WD_COLOR_INDEX.YELLOW),
+                ],
+                [
+                    ("(", WD_COLOR_INDEX.YELLOW),
+                    ("Huang Kun-xiang and Xu Xiao-feng", None),
+                    (")", WD_COLOR_INDEX.YELLOW),
+                ],
+            ],
+        )
+
+        clean_subs.remove_sources_from_docx(source_path, output_path)
+
+        out_doc = Document(output_path)
+        subtitle_colors = [run.font.highlight_color for run in out_doc.paragraphs[1].runs]
+        parenthesis_colors = [run.font.highlight_color for run in out_doc.paragraphs[2].runs]
+
+        self.assertEqual(
+            subtitle_colors,
+            [
+                WD_COLOR_INDEX.YELLOW,
+                WD_COLOR_INDEX.YELLOW,
+                WD_COLOR_INDEX.YELLOW,
+                WD_COLOR_INDEX.YELLOW,
+                WD_COLOR_INDEX.YELLOW,
+            ],
+        )
+        self.assertEqual(
+            parenthesis_colors,
+            [WD_COLOR_INDEX.YELLOW, WD_COLOR_INDEX.YELLOW, WD_COLOR_INDEX.YELLOW],
+        )
+
     def test_removes_run_shading_colors_from_non_parenthesis_lines(self) -> None:
         temp_dir = Path(tempfile.mkdtemp(prefix="subs_tools_clean_test_"))
         source_path = temp_dir / "input.docx"
