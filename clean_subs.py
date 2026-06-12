@@ -1,4 +1,4 @@
-#!/home/weiying/python/word/.venv/bin/python
+#!/usr/bin/env python3
 
 from __future__ import annotations
 
