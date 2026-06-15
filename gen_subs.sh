@@ -4,7 +4,7 @@ set -uo pipefail
 usage() {
   cat <<'EOF2'
 Usage:
-  gen_subs.sh [target_dir]
+  gen-subs [target_dir]
 
 For each *.txt in target_dir (excluding *.baseline.txt):
   - source docx: <same-basename>.docx
@@ -14,7 +14,7 @@ Environment overrides:
   GENERATE_SUBS_SCRIPT   default: $HOME/python/word/generate_subs.py
   GENERATE_SUBS_PYTHON   default: $HOME/python/word/.venv/bin/python
   GENERATE_SUBS_TEMPLATE default: $HOME/python/word/templates/subs_template.docx
-  GENERATE_SUBS_CROP_SCRIPT default: <this-script-dir>/crop_subs.py
+  GENERATE_SUBS_CROP_SCRIPT default: $HOME/python/subs-tools/crop_subs.py
 EOF2
 }
 
@@ -27,9 +27,7 @@ TARGET_DIR="${1:-.}"
 SCRIPT_PATH="${GENERATE_SUBS_SCRIPT:-$HOME/python/word/generate_subs.py}"
 PYTHON_BIN="${GENERATE_SUBS_PYTHON:-$HOME/python/word/.venv/bin/python}"
 TEMPLATE_PATH="${GENERATE_SUBS_TEMPLATE:-$HOME/python/word/templates/subs_template.docx}"
-SELF_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
-CROP_SCRIPT_DIR="$(cd "$(dirname "$SELF_PATH")" && pwd)"
-CROP_SCRIPT_PATH="${GENERATE_SUBS_CROP_SCRIPT:-$CROP_SCRIPT_DIR/crop_subs.py}"
+CROP_SCRIPT_PATH="${GENERATE_SUBS_CROP_SCRIPT:-$HOME/python/subs-tools/crop_subs.py}"
 OUTPUT_DIR="${TARGET_DIR%/}/output"
 
 if [[ ! -d "$TARGET_DIR" ]]; then
