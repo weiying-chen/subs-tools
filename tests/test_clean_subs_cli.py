@@ -29,6 +29,14 @@ def _highlight_run(run, value: str) -> None:
 
 
 class CleanSubsCliTest(unittest.TestCase):
+    def test_clean_subs_wrapper_uses_home_word_venv(self):
+        wrapper_path = Path(__file__).resolve().parents[1] / "clean-subs"
+        wrapper = wrapper_path.read_text(encoding="utf-8")
+
+        self.assertIn('"$HOME/python/word/.venv/bin/python"', wrapper)
+        self.assertIn('"$HOME/python/subs-tools/clean_subs.py"', wrapper)
+        self.assertNotIn('"$ROOT/.venv/bin/python"', wrapper)
+
     def test_resolve_input_paths_uses_current_directory_docx_when_empty(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp_path = Path(tmp_dir)

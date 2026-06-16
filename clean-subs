@@ -1,19 +1,3 @@
 #!/usr/bin/env bash
 set -euo pipefail
-
-SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
-ROOT="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
-PY="$ROOT/.venv/bin/python"
-SCRIPT="$ROOT/clean_subs.py"
-
-if [[ ! -x "$PY" ]]; then
-  echo "[error] python binary not executable: $PY" >&2
-  exit 1
-fi
-
-if [[ ! -f "$SCRIPT" ]]; then
-  echo "[error] clean_subs script not found: $SCRIPT" >&2
-  exit 1
-fi
-
-exec "$PY" "$SCRIPT" "$@"
+exec "$HOME/python/word/.venv/bin/python" "$HOME/python/subs-tools/clean_subs.py" "$@"
