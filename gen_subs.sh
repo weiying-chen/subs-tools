@@ -113,13 +113,13 @@ if crop_output="$($PYTHON_BIN "$CROP_SCRIPT_PATH" "$TARGET_DIR" 2>&1)"; then
     cleaned="$line"
     cleaned="${cleaned#\[wrote\] }"
     cleaned="${cleaned#${TARGET_DIR%/}/}"
-    echo "[crop] $cleaned"
+    echo "[cropped] $cleaned"
   done <<< "$crop_output"
 else
   crop_failed=1
   while IFS= read -r line; do
     [[ -z "$line" ]] && continue
-    echo "[crop] $line" >&2
+    echo "[cropped] $line" >&2
   done <<< "$crop_output"
 fi
 
