@@ -165,7 +165,7 @@ class CleanSubsCliTest(unittest.TestCase):
 
         self.assertIn(b'xmlns:ns6="http://schemas.microsoft.com/office/drawing/2010/main"', normalized_xml)
 
-    def test_remove_sources_turns_off_track_changes(self):
+    def test_remove_sources_preserves_settings_xml_bytes(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
             input_path = Path(tmp_dir) / "input.docx"
             output_path = Path(tmp_dir) / "output.docx"
@@ -184,8 +184,10 @@ class CleanSubsCliTest(unittest.TestCase):
 
             clean_subs.remove_sources_from_docx(input_path, output_path)
 
+            with ZipFile(input_path, "r") as docx:
+                original_settings = docx.read("word/settings.xml")
             with ZipFile(output_path, "r") as docx:
-                self.assertNotIn(b"<w:trackRevisions", docx.read("word/settings.xml"))
+                self.assertEqual(docx.read("word/settings.xml"), original_settings)
 
     def test_accepting_revisions_drops_leading_inserted_break_runs(self):
         root = ET.fromstring(

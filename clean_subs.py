@@ -76,15 +76,6 @@ def _repair_word_xml_namespaces(xml_data: bytes) -> bytes:
     )
 
 
-def _remove_track_revisions(xml_data: bytes) -> bytes:
-    root = ET.fromstring(xml_data)
-    for element in list(root.iter(TRACK_REVISIONS_TAG)):
-        parent = _find_parent(root, element)
-        if parent is not None:
-            parent.remove(element)
-    return ET.tostring(root, encoding="utf-8", xml_declaration=True)
-
-
 def _find_parent(root, target):
     for parent in root.iter():
         if target in list(parent):
@@ -209,8 +200,6 @@ def _write_cleaned_package(
                             data,
                             zin.read(info.filename),
                         )
-                elif info.filename == "word/settings.xml":
-                    data = _remove_track_revisions(data)
                 zout.writestr(info, data)
     final_temp_path.replace(output_path)
 

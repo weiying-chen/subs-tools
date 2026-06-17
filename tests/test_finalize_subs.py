@@ -4,6 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
+from io import StringIO
 
 import finalize_subs
 import rename_subs
@@ -56,6 +57,27 @@ class FinalizeSubsTest(unittest.TestCase):
 
             self.assertEqual(result, Path(tmp_dir) / "sample_final.docx")
             rename_docx.assert_called_once_with(source)
+
+    def test_main_reports_renamed_not_finalized(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            source = Path(tmp_dir) / "sample_al_el.docx"
+            source.touch()
+            stdout = StringIO()
+
+            with (
+                mock.patch("sys.stdout", stdout),
+                mock.patch(
+                    "finalize_subs.finalize_docx",
+                    return_value=Path(tmp_dir) / "sample_final.docx",
+                ),
+            ):
+                exit_code = finalize_subs.main([str(source)])
+
+            self.assertEqual(exit_code, 0)
+            output = stdout.getvalue()
+            self.assertIn("[cleaned]", output)
+            self.assertIn("[renamed]", output)
+            self.assertNotIn("[finalized]", output)
 
     def test_wrapper_scripts_use_home_word_venv(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]

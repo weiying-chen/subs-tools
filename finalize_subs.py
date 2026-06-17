@@ -69,7 +69,7 @@ def main(argv: list[str] | None = None) -> int:
             continue
 
         print(f"[cleaned] {path}")
-        print(f"[finalized] {final_path}")
+        print(f"[renamed] {final_path}")
 
     return exit_code
 
