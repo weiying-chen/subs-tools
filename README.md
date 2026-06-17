@@ -5,6 +5,8 @@ Subtitle-related tooling in one place.
 ## Scripts
 
 - `clean-subs`: clean source markings from DOCX files using the repo venv.
+- `rename-subs`: rename generated subtitle DOCX files from `_al` or `_al_el` to `_final`.
+- `finalize-subs`: run subtitle cleanup first, then rename the cleaned DOCX to `_final`.
 - `gen_subs.sh`: generate `_al.docx` outputs from `.txt` + source `.docx`, then crop images in the same directory to 16:9.
 - `setup_subs.py`: extract subtitle rows from docx and write sectioned `.txt` + raw `.baseline.txt`.
 - `crop_subs.py`: center-crop images to exact 16:9 in a directory.
@@ -21,6 +23,18 @@ Prepare subtitle files from all docx in current directory (default `--mode auto`
 
 ```bash
 python3 /home/weiying/python/subs-tools/setup_subs.py . --force
+```
+
+Finalize generated subtitle DOCX files in current directory:
+
+```bash
+/home/weiying/python/subs-tools/finalize-subs
+```
+
+Rename generated subtitle DOCX files without cleaning:
+
+```bash
+/home/weiying/python/subs-tools/rename-subs
 ```
 
 Write only baseline output:
