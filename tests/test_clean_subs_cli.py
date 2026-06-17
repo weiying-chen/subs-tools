@@ -221,6 +221,49 @@ class CleanSubsCliTest(unittest.TestCase):
             with ZipFile(output_path, "r") as docx:
                 self.assertEqual(docx.read("word/settings.xml"), original_settings)
 
+    def test_remove_sources_accepts_inserted_and_deleted_text_in_output(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "input.docx"
+            output_path = Path(tmp_dir) / "output.docx"
+            doc = Document()
+            doc.add_paragraph("placeholder")
+            doc.save(input_path)
+
+            ns = {"w": clean_subs.WORD_NAMESPACE}
+            with ZipFile(input_path, "r") as zin:
+                entries = [(info, zin.read(info.filename)) for info in zin.infolist()]
+                document_xml = zin.read("word/document.xml")
+
+            root = ET.fromstring(document_xml)
+            paragraph = root.find(".//w:body/w:p", ns)
+            for child in list(paragraph):
+                paragraph.remove(child)
+            inserted = ET.SubElement(paragraph, f"{{{clean_subs.WORD_NAMESPACE}}}ins")
+            inserted_run = ET.SubElement(inserted, f"{{{clean_subs.WORD_NAMESPACE}}}r")
+            inserted_text = ET.SubElement(inserted_run, f"{{{clean_subs.WORD_NAMESPACE}}}t")
+            inserted_text.text = "accepted"
+            deleted = ET.SubElement(paragraph, f"{{{clean_subs.WORD_NAMESPACE}}}del")
+            deleted_run = ET.SubElement(deleted, f"{{{clean_subs.WORD_NAMESPACE}}}r")
+            deleted_text = ET.SubElement(deleted_run, f"{{{clean_subs.WORD_NAMESPACE}}}delText")
+            deleted_text.text = "deleted"
+
+            updated_document_xml = ET.tostring(root, encoding="utf-8", xml_declaration=True)
+            with ZipFile(input_path, "w", compression=ZIP_DEFLATED) as zout:
+                for info, data in entries:
+                    if info.filename == "word/document.xml":
+                        data = updated_document_xml
+                    zout.writestr(info, data)
+
+            clean_subs.remove_sources_from_docx(input_path, output_path)
+
+            text = "\n".join(paragraph.text for paragraph in Document(output_path).paragraphs)
+            self.assertIn("accepted", text)
+            self.assertNotIn("deleted", text)
+            with ZipFile(output_path, "r") as docx:
+                document_xml = docx.read("word/document.xml")
+            self.assertNotIn(b"<w:ins", document_xml)
+            self.assertNotIn(b"<w:del", document_xml)
+
     def test_accepting_revisions_drops_leading_inserted_break_runs(self):
         root = ET.fromstring(
             b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
