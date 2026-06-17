@@ -165,6 +165,38 @@ class CleanSubsCliTest(unittest.TestCase):
 
         self.assertIn(b'xmlns:ns6="http://schemas.microsoft.com/office/drawing/2010/main"', normalized_xml)
 
+    def test_normalize_document_xml_with_declaration_keeps_valid_root(self):
+        original_xml = (
+            b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            b'<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '
+            b'xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" '
+            b'mc:Ignorable="w14 w15">'
+            b"<w:body/></w:document>"
+        )
+        cleaned_xml = (
+            b"<?xml version='1.0' encoding='utf-8'?>\n"
+            b'<ns0:document xmlns:ns0="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '
+            b'xmlns:ns2="http://schemas.openxmlformats.org/officeDocument/2006/relationships" '
+            b'xmlns:ns3="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing">'
+            b'<ns0:body><ns0:p><ns0:hyperlink ns2:id="rId9"/></ns0:p></ns0:body>'
+            b'<ns3:inline/>'
+            b"</ns0:document>"
+        )
+
+        normalized_xml = clean_subs._normalize_xml_part_against_original(
+            cleaned_xml,
+            original_xml,
+        )
+
+        self.assertNotIn(b'">dy"', normalized_xml)
+        self.assertNotIn(b">org/", normalized_xml)
+        self.assertRegex(normalized_xml, rb">\s*<w:body>")
+        self.assertNotIn(b"ns2:id", normalized_xml)
+        self.assertIn(b'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"', normalized_xml)
+        self.assertIn(b"r:id", normalized_xml)
+        self.assertIn(b'xmlns:ns3="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"', normalized_xml)
+        ET.fromstring(normalized_xml)
+
     def test_remove_sources_preserves_settings_xml_bytes(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
             input_path = Path(tmp_dir) / "input.docx"

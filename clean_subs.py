@@ -55,6 +55,10 @@ DRAWING_PREFIX_BY_URI = {
     "http://schemas.openxmlformats.org/drawingml/2006/main": "a",
     "http://schemas.openxmlformats.org/drawingml/2006/picture": "pic",
 }
+DOCUMENT_PREFIX_BY_URI = {
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships": "r",
+    **DRAWING_PREFIX_BY_URI,
+}
 
 
 def _should_accept_revisions_in_part(filename: str) -> bool:
@@ -106,24 +110,20 @@ def _normalize_xml_part_against_original(
 ) -> bytes:
     cleaned_text = cleaned_xml.decode("utf-8")
     original_text = original_xml.decode("utf-8")
-    cleaned_root = _first_root_tag(cleaned_text)
+    cleaned_root_match = re.search(r"<[^?][^>]*>", cleaned_text)
+    if cleaned_root_match is None:
+        raise ValueError("No root tag found.")
+    cleaned_root = cleaned_root_match.group(0)
     original_root = _first_root_tag(original_text)
 
     desired_prefix_by_uri = _namespace_prefixes(original_root)
-    desired_prefix_by_uri.update(DRAWING_PREFIX_BY_URI)
+    desired_prefix_by_uri.update(DOCUMENT_PREFIX_BY_URI)
 
     normalized_root = original_root
-    for uri, prefix in DRAWING_PREFIX_BY_URI.items():
-        normalized_root = _ensure_root_namespace(normalized_root, prefix, uri)
 
-    body = cleaned_text[len(cleaned_root) :]
-    if "ns6:" in body:
-        normalized_root = _ensure_root_namespace(
-            normalized_root,
-            "ns6",
-            OFFICE_DRAWING_NAMESPACE,
-        )
-    for uri, current_prefix in _namespace_prefixes(cleaned_root).items():
+    body = cleaned_text[cleaned_root_match.end() :]
+    cleaned_prefixes = _namespace_prefixes(cleaned_root)
+    for uri, current_prefix in cleaned_prefixes.items():
         desired_prefix = desired_prefix_by_uri.get(uri)
         if not desired_prefix or desired_prefix == current_prefix:
             continue
@@ -136,6 +136,19 @@ def _normalize_xml_part_against_original(
             rf"(\s){re.escape(current_prefix)}:",
             lambda match: f"{match.group(1)}{desired_prefix}:",
             body,
+        )
+
+    for uri, prefix in DOCUMENT_PREFIX_BY_URI.items():
+        if f"{prefix}:" in body:
+            normalized_root = _ensure_root_namespace(normalized_root, prefix, uri)
+    for uri, prefix in cleaned_prefixes.items():
+        if f"{prefix}:" in body:
+            normalized_root = _ensure_root_namespace(normalized_root, prefix, uri)
+    if "ns6:" in body:
+        normalized_root = _ensure_root_namespace(
+            normalized_root,
+            "ns6",
+            OFFICE_DRAWING_NAMESPACE,
         )
 
     return (normalized_root + body).encode("utf-8")
