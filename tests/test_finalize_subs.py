@@ -79,14 +79,14 @@ class FinalizeSubsTest(unittest.TestCase):
             self.assertIn("[renamed]", output)
             self.assertNotIn("[finalized]", output)
 
-    def test_wrapper_scripts_use_home_word_venv(self) -> None:
+    def test_wrapper_and_symlink_split_matches_dependency_needs(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
 
-        rename_wrapper = (repo_root / "rename-subs").read_text(encoding="utf-8")
+        rename_command = repo_root / "rename-subs"
         finalize_wrapper = (repo_root / "finalize-subs").read_text(encoding="utf-8")
 
-        self.assertIn('"$HOME/python/word/.venv/bin/python"', rename_wrapper)
-        self.assertIn('"$HOME/python/subs-tools/rename_subs.py"', rename_wrapper)
+        self.assertTrue(rename_command.is_symlink())
+        self.assertEqual(rename_command.resolve(), (repo_root / "rename_subs.py").resolve())
         self.assertIn('"$HOME/python/word/.venv/bin/python"', finalize_wrapper)
         self.assertIn('"$HOME/python/subs-tools/finalize_subs.py"', finalize_wrapper)
 
