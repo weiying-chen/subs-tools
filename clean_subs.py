@@ -52,6 +52,10 @@ REVISION_XML_BASENAMES = {
     "document.xml",
 }
 XMLNS_DECL_RE = re.compile(r'xmlns:([A-Za-z0-9_]+)="([^"]+)"')
+TRACK_REVISIONS_XML_RE = re.compile(
+    r"<(?P<prefix>[A-Za-z0-9_]+):trackRevisions\b[^>]*/>"
+    r"|<(?P<prefix2>[A-Za-z0-9_]+):trackRevisions\b[^>]*>\s*</(?P=prefix2):trackRevisions>"
+)
 DRAWING_PREFIX_BY_URI = {
     "http://schemas.openxmlformats.org/drawingml/2006/main": "a",
     "http://schemas.openxmlformats.org/drawingml/2006/picture": "pic",
@@ -218,7 +222,8 @@ def _write_cleaned_package(
                     and info.filename in temp_names
                 ):
                     data = ztemp.read(info.filename)
-                    data = _strip_run_shading_xml(data)
+                    if _should_accept_revisions_in_part(info.filename):
+                        data = _strip_run_shading_xml(data)
                     if info.filename == "word/document.xml":
                         data = _normalize_xml_part_against_original(
                             data,
@@ -359,11 +364,9 @@ def _accept_revisions_in_tree(root) -> None:
         pass
 
 
-def _disable_track_revisions_in_tree(root) -> None:
-    for element in list(root.iter(TRACK_REVISIONS_TAG)):
-        parent = _find_parent(root, element)
-        if parent is not None:
-            parent.remove(element)
+def _disable_track_revisions_xml(xml_bytes: bytes) -> bytes:
+    text = xml_bytes.decode("utf-8")
+    return TRACK_REVISIONS_XML_RE.sub("", text).encode("utf-8")
 
 
 def _accepted_revisions_docx_bytes(input_path: Path) -> bytes:
@@ -378,10 +381,7 @@ def _accepted_revisions_docx_bytes(input_path: Path) -> bytes:
                 _strip_leading_break_runs(root)
                 data = ET.tostring(root, encoding="utf-8", xml_declaration=True)
             elif _should_clean_settings_part(info.filename):
-                data = _repair_word_xml_namespaces(data)
-                root = ET.fromstring(data)
-                _disable_track_revisions_in_tree(root)
-                data = ET.tostring(root, encoding="utf-8", xml_declaration=True)
+                data = _disable_track_revisions_xml(data)
             zout.writestr(info, data)
     return buffer.getvalue()
 
