@@ -24,7 +24,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         "paths",
         nargs="*",
         help=(
-            "DOCX files to finalize. Default: DOCX files ending in _al or _al_el "
+            "DOCX files to finalize. Default: DOCX files ending in _al_el or _al_sy "
             "in the current directory."
         ),
     )
@@ -41,7 +41,7 @@ def main(argv: list[str] | None = None) -> int:
     targets = rename_subs.resolve_input_paths(args.paths)
     if not targets:
         print(
-            "[warn] no subtitle DOCX files ending in _al or _al_el found",
+            "[warn] no subtitle DOCX files ending in _al_el or _al_sy found",
             file=sys.stderr,
         )
         return 1

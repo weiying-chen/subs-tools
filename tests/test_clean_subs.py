@@ -132,6 +132,27 @@ class CleanSubsHighlightTest(unittest.TestCase):
         self.assertEqual(first_colors, [WD_COLOR_INDEX.YELLOW])
         self.assertEqual(second_colors, [WD_COLOR_INDEX.YELLOW, WD_COLOR_INDEX.YELLOW])
 
+    def test_preserves_yellow_for_xxx_marker_lines(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="subs_tools_clean_test_"))
+        source_path = temp_dir / "input.docx"
+        output_path = temp_dir / "output.docx"
+        self._write_docx_with_highlights(
+            source_path,
+            [
+                [("XXX", WD_COLOR_INDEX.YELLOW)],
+                [("XXX", WD_COLOR_INDEX.TURQUOISE)],
+            ],
+        )
+
+        clean_subs.remove_sources_from_docx(source_path, output_path)
+
+        out_doc = Document(output_path)
+        first_colors = [run.font.highlight_color for run in out_doc.paragraphs[0].runs]
+        second_colors = [run.font.highlight_color for run in out_doc.paragraphs[1].runs]
+
+        self.assertEqual(first_colors, [WD_COLOR_INDEX.YELLOW])
+        self.assertEqual(second_colors, [None])
+
     def test_preserves_yellow_on_timestamp_paragraph_before_parenthesis_note(self) -> None:
         temp_dir = Path(tempfile.mkdtemp(prefix="subs_tools_clean_test_"))
         source_path = temp_dir / "input.docx"

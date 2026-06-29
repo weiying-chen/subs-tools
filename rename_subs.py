@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 
-RENAME_SUFFIXES = ("_al_el", "_al")
+RENAME_SUFFIXES = ("_al_el", "_al_sy")
 FINAL_SUFFIX = "_final"
 
 
@@ -49,13 +49,13 @@ def rename_docx(path: Path) -> Path:
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="rename-subs",
-        description="Rename generated subtitle DOCX files from _al/_al_el to _final.",
+        description="Rename generated subtitle DOCX files from _al_el/_al_sy to _final.",
     )
     parser.add_argument(
         "paths",
         nargs="*",
         help=(
-            "DOCX files to rename. Default: DOCX files ending in _al or _al_el "
+            "DOCX files to rename. Default: DOCX files ending in _al_el or _al_sy "
             "in the current directory."
         ),
     )
@@ -72,7 +72,7 @@ def main(argv: list[str] | None = None) -> int:
     targets = resolve_input_paths(args.paths)
     if not targets:
         print(
-            "[warn] no subtitle DOCX files ending in _al or _al_el found",
+            "[warn] no subtitle DOCX files ending in _al_el or _al_sy found",
             file=sys.stderr,
         )
         return 1

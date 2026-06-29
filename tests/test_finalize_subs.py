@@ -19,8 +19,8 @@ class RenameSubsTest(unittest.TestCase):
             Path("人文講堂_其實你胖得很冤枉  - 陳欣湄 [2]_final.docx"),
         )
 
-    def test_final_name_replaces_al_suffix(self) -> None:
-        path = Path("sample_al.docx")
+    def test_final_name_replaces_al_sy_suffix(self) -> None:
+        path = Path("sample_al_sy.docx")
 
         self.assertEqual(rename_subs.final_name_for(path), Path("sample_final.docx"))
 

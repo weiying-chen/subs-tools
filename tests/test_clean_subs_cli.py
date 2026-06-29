@@ -103,9 +103,10 @@ class CleanSubsCliTest(unittest.TestCase):
             self.assertIn("keep shaded text", cleaned_text)
             self.assertIn("keep highlighted text", cleaned_text)
             self.assertTrue(output_doc.paragraphs[0]._p.findall(".//w:highlight", {"w": clean_subs.WORD_NAMESPACE}))
-            for paragraph in output_doc.paragraphs[2:]:
-                self.assertFalse(paragraph._p.findall(".//w:shd", {"w": clean_subs.WORD_NAMESPACE}))
-                self.assertFalse(paragraph._p.findall(".//w:highlight", {"w": clean_subs.WORD_NAMESPACE}))
+            self.assertFalse(output_doc.paragraphs[2]._p.findall(".//w:shd", {"w": clean_subs.WORD_NAMESPACE}))
+            self.assertFalse(output_doc.paragraphs[2]._p.findall(".//w:highlight", {"w": clean_subs.WORD_NAMESPACE}))
+            self.assertFalse(output_doc.paragraphs[3]._p.findall(".//w:shd", {"w": clean_subs.WORD_NAMESPACE}))
+            self.assertTrue(output_doc.paragraphs[3]._p.findall(".//w:highlight", {"w": clean_subs.WORD_NAMESPACE}))
 
     def test_remove_sources_strips_intro_marking_formatting(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -131,9 +132,10 @@ class CleanSubsCliTest(unittest.TestCase):
             self.assertIn("keep intro shaded text", cleaned_text)
             self.assertIn("keep intro highlighted text", cleaned_text)
             self.assertTrue(output_doc.paragraphs[0]._p.findall(".//w:highlight", {"w": clean_subs.WORD_NAMESPACE}))
-            for paragraph in output_doc.paragraphs[2:]:
-                self.assertFalse(paragraph._p.findall(".//w:shd", {"w": clean_subs.WORD_NAMESPACE}))
-                self.assertFalse(paragraph._p.findall(".//w:highlight", {"w": clean_subs.WORD_NAMESPACE}))
+            self.assertFalse(output_doc.paragraphs[2]._p.findall(".//w:shd", {"w": clean_subs.WORD_NAMESPACE}))
+            self.assertFalse(output_doc.paragraphs[2]._p.findall(".//w:highlight", {"w": clean_subs.WORD_NAMESPACE}))
+            self.assertFalse(output_doc.paragraphs[3]._p.findall(".//w:shd", {"w": clean_subs.WORD_NAMESPACE}))
+            self.assertTrue(output_doc.paragraphs[3]._p.findall(".//w:highlight", {"w": clean_subs.WORD_NAMESPACE}))
 
     def test_repair_missing_use_local_dpi_namespace(self):
         broken_xml = (
@@ -197,7 +199,7 @@ class CleanSubsCliTest(unittest.TestCase):
         self.assertIn(b'xmlns:ns3="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"', normalized_xml)
         ET.fromstring(normalized_xml)
 
-    def test_remove_sources_preserves_settings_xml_bytes(self):
+    def test_remove_sources_disables_track_revisions_in_settings_xml(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
             input_path = Path(tmp_dir) / "input.docx"
             output_path = Path(tmp_dir) / "output.docx"
@@ -205,21 +207,26 @@ class CleanSubsCliTest(unittest.TestCase):
             doc.add_paragraph("keep this line")
             doc.save(input_path)
 
-            with ZipFile(input_path, "a", compression=ZIP_DEFLATED) as docx:
-                settings_xml = docx.read("word/settings.xml")
-                settings_xml = settings_xml.replace(
-                    b"<w:defaultTabStop",
-                    b"<w:trackRevisions/><w:defaultTabStop",
-                    1,
-                )
-                docx.writestr("word/settings.xml", settings_xml)
+            with ZipFile(input_path, "r") as docx:
+                entries = [(info, docx.read(info.filename)) for info in docx.infolist()]
+            with ZipFile(input_path, "w", compression=ZIP_DEFLATED) as docx:
+                for info, data in entries:
+                    if info.filename == "word/settings.xml":
+                        data = data.replace(
+                            b"<w:defaultTabStop",
+                            b"<w:trackRevisions/><w:defaultTabStop",
+                            1,
+                        )
+                    docx.writestr(info, data)
 
             clean_subs.remove_sources_from_docx(input_path, output_path)
 
-            with ZipFile(input_path, "r") as docx:
-                original_settings = docx.read("word/settings.xml")
             with ZipFile(output_path, "r") as docx:
-                self.assertEqual(docx.read("word/settings.xml"), original_settings)
+                settings_xml = docx.read("word/settings.xml")
+            root = ET.fromstring(settings_xml)
+            ns = {"w": clean_subs.WORD_NAMESPACE}
+            self.assertEqual(root.findall(".//w:trackRevisions", ns), [])
+            self.assertTrue(root.findall(".//w:defaultTabStop", ns))
 
     def test_remove_sources_accepts_inserted_and_deleted_text_in_output(self):
         with tempfile.TemporaryDirectory() as tmp_dir:

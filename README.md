@@ -5,7 +5,7 @@ Subtitle-related tooling in one place.
 ## Scripts
 
 - `clean-subs`: clean source markings from DOCX files using the repo venv.
-- `rename-subs`: rename generated subtitle DOCX files from `_al` or `_al_el` to `_final`.
+- `rename-subs`: rename generated subtitle DOCX files from `_al_el` or `_al_sy` to `_final`.
 - `finalize-subs`: run subtitle cleanup first, then rename the cleaned DOCX to `_final`.
 - `convert-subs`: convert transcript BODY `.txt` files into `.srt` files.
 - `gen_subs.sh`: generate `_al.docx` outputs from `.txt` + source `.docx`, then crop images in the same directory to 16:9.

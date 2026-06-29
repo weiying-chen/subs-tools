@@ -31,6 +31,7 @@ SECTION_LABELS = {
     "字幕:",
 }
 SUBTITLE_LABELS = {"字幕：", "字幕:"}
+YELLOW_MARKER_TEXTS = {"XXX"}
 WORD_NAMESPACE = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 OFFICE_DRAWING_NAMESPACE = "http://schemas.microsoft.com/office/drawing/2010/main"
 INSERTION_TAGS = {f"{{{WORD_NAMESPACE}}}ins", f"{{{WORD_NAMESPACE}}}moveTo"}
@@ -68,6 +69,10 @@ def _should_accept_revisions_in_part(filename: str) -> bool:
     if basename in REVISION_XML_BASENAMES:
         return True
     return basename.startswith("header") or basename.startswith("footer")
+
+
+def _should_clean_settings_part(filename: str) -> bool:
+    return filename == "word/settings.xml"
 
 
 def _repair_word_xml_namespaces(xml_data: bytes) -> bytes:
@@ -205,7 +210,13 @@ def _write_cleaned_package(
         with ZipFile(final_temp_path, "w", compression=ZIP_DEFLATED) as zout:
             for info in zin.infolist():
                 data = zin.read(info.filename)
-                if _should_accept_revisions_in_part(info.filename) and info.filename in temp_names:
+                if (
+                    (
+                        _should_accept_revisions_in_part(info.filename)
+                        or _should_clean_settings_part(info.filename)
+                    )
+                    and info.filename in temp_names
+                ):
                     data = ztemp.read(info.filename)
                     data = _strip_run_shading_xml(data)
                     if info.filename == "word/document.xml":
@@ -285,6 +296,8 @@ def _should_restore_yellow_highlight(paragraph) -> bool:
     text = paragraph.text.strip()
     if not text:
         return False
+    if text in YELLOW_MARKER_TEXTS:
+        return any(run.font.highlight_color == WD_COLOR_INDEX.YELLOW for run in paragraph.runs)
     if not (text.startswith("(") or text.endswith(")")):
         return False
     return any(run.font.highlight_color == WD_COLOR_INDEX.YELLOW for run in paragraph.runs)
@@ -306,7 +319,10 @@ def _normalize_highlights(doc: Document) -> None:
             if rpr is not None:
                 for shd in list(rpr.findall(qn("w:shd"))):
                     rpr.remove(shd)
-            if run.font.highlight_color is not None:
+            if (
+                run.font.highlight_color is not None
+                and run.font.highlight_color != WD_COLOR_INDEX.YELLOW
+            ):
                 run.font.highlight_color = None
 
     for idx in sorted(paragraphs_to_restore):
@@ -343,6 +359,13 @@ def _accept_revisions_in_tree(root) -> None:
         pass
 
 
+def _disable_track_revisions_in_tree(root) -> None:
+    for element in list(root.iter(TRACK_REVISIONS_TAG)):
+        parent = _find_parent(root, element)
+        if parent is not None:
+            parent.remove(element)
+
+
 def _accepted_revisions_docx_bytes(input_path: Path) -> bytes:
     buffer = BytesIO()
     with ZipFile(input_path, "r") as zin, ZipFile(buffer, "w", compression=ZIP_DEFLATED) as zout:
@@ -353,6 +376,11 @@ def _accepted_revisions_docx_bytes(input_path: Path) -> bytes:
                 root = ET.fromstring(data)
                 _accept_revisions_in_tree(root)
                 _strip_leading_break_runs(root)
+                data = ET.tostring(root, encoding="utf-8", xml_declaration=True)
+            elif _should_clean_settings_part(info.filename):
+                data = _repair_word_xml_namespaces(data)
+                root = ET.fromstring(data)
+                _disable_track_revisions_in_tree(root)
                 data = ET.tostring(root, encoding="utf-8", xml_declaration=True)
             zout.writestr(info, data)
     return buffer.getvalue()
