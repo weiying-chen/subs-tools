@@ -67,6 +67,38 @@ class ConvertSubsTest(unittest.TestCase):
             ),
         )
 
+    def test_build_srt_ignores_xxx_marker_before_timestamp(self) -> None:
+        text = "\n".join(
+            [
+                "BODY:",
+                "XXX 00:02:40:00\t00:02:44:00\t補腎養陰 疏肝健脾",
+                "(Cancer Prevention for a Yang-Deficient Constitution)",
+            ]
+        )
+
+        self.assertEqual(
+            convert_subs.build_srt(text, 30),
+            "\n".join(
+                [
+                    "1",
+                    "00:02:40,000 --> 00:02:44,000",
+                    "(Cancer Prevention for a Yang-Deficient Constitution)",
+                    "",
+                ]
+            ),
+        )
+
+    def test_build_srt_skips_xxx_without_timestamp(self) -> None:
+        text = "\n".join(
+            [
+                "BODY:",
+                "XXX chinese",
+                "english",
+            ]
+        )
+
+        self.assertEqual(convert_subs.build_srt(text, 30), "")
+
     def test_main_uses_default_output_path(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             source = Path(tmp_dir) / "sample.txt"

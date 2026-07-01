@@ -11,7 +11,7 @@ from pathlib import Path
 
 DEFAULT_FPS = 30
 TIMESTAMP_RE = re.compile(
-    r"^(?P<start>\d{2}:\d{2}:\d{2}:\d{2})\s+"
+    r"^(?:XXX\s+)?(?P<start>\d{2}:\d{2}:\d{2}:\d{2})\s+"
     r"(?P<end>\d{2}:\d{2}:\d{2}:\d{2})\s+"
     r"(?P<body>.*\S.*)$"
 )
