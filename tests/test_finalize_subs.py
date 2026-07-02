@@ -97,7 +97,7 @@ class FinalizeSubsTest(unittest.TestCase):
             run_analysis.assert_called_once_with([Path(tmp_dir) / "sample.txt"])
             output = stdout.getvalue()
             self.assertIn("[cleaned]", output)
-            self.assertIn("[thumbnail]", output)
+            self.assertIn("[exported]", output)
             self.assertIn("[renamed]", output)
             self.assertNotIn("[finalized]", output)
 

@@ -141,7 +141,7 @@ def main(argv: list[str] | None = None) -> int:
             continue
 
         print(f"[cleaned] {path}")
-        print(f"[thumbnail] {result.thumbnail_path}")
+        print(f"[exported] {result.thumbnail_path}")
         print(f"[renamed] {result.final_path}")
         analysis_paths.append(result.analysis_path)
 
