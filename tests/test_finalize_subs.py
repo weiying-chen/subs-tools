@@ -59,8 +59,19 @@ class FinalizeSubsTest(unittest.TestCase):
 
             self.assertEqual(result.final_path, Path(tmp_dir) / "sample_final.docx")
             self.assertEqual(result.thumbnail_path, Path(tmp_dir) / "sample.png")
+            self.assertEqual(result.analysis_path, Path(tmp_dir) / "sample.txt")
             export_thumbnail.assert_called_once_with(source)
             rename_docx.assert_called_once_with(source)
+
+    def test_analysis_text_path_uses_pre_final_base_name(self) -> None:
+        self.assertEqual(
+            finalize_subs.analysis_text_path_for_docx(Path("sample_al_el.docx")),
+            Path("sample.txt"),
+        )
+        self.assertEqual(
+            finalize_subs.analysis_text_path_for_docx(Path("sample_al_sy.docx")),
+            Path("sample.txt"),
+        )
 
     def test_main_reports_renamed_not_finalized(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -75,17 +86,54 @@ class FinalizeSubsTest(unittest.TestCase):
                     return_value=finalize_subs.FinalizeResult(
                         final_path=Path(tmp_dir) / "sample_final.docx",
                         thumbnail_path=Path(tmp_dir) / "sample.png",
+                        analysis_path=Path(tmp_dir) / "sample.txt",
                     ),
                 ),
+                mock.patch("finalize_subs.run_subtitle_analysis", return_value=0) as run_analysis,
             ):
                 exit_code = finalize_subs.main([str(source)])
 
             self.assertEqual(exit_code, 0)
+            run_analysis.assert_called_once_with([Path(tmp_dir) / "sample.txt"])
             output = stdout.getvalue()
             self.assertIn("[cleaned]", output)
             self.assertIn("[thumbnail]", output)
             self.assertIn("[renamed]", output)
             self.assertNotIn("[finalized]", output)
+
+    def test_run_subtitle_analysis_invokes_watch_once(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            watch_ts = tmp_path / "node" / "sub" / "src" / "cli" / "watch.ts"
+            watch_ts.parent.mkdir(parents=True)
+            watch_ts.touch()
+            text_path = tmp_path / "sample.txt"
+            text_path.touch()
+
+            completed = mock.Mock(returncode=0)
+            with (
+                mock.patch.dict("os.environ", {"SUB_WATCH_TS": str(watch_ts)}),
+                mock.patch("finalize_subs.subprocess.run", return_value=completed) as run,
+            ):
+                exit_code = finalize_subs.run_subtitle_analysis([text_path])
+
+            self.assertEqual(exit_code, 0)
+            run.assert_called_once_with(
+                [
+                    "npx",
+                    "tsx",
+                    str(watch_ts),
+                    "--once",
+                    str(text_path),
+                    "--type",
+                    "subs",
+                    "--max-cps",
+                    "16",
+                    "--min-cps",
+                    "5",
+                ],
+                cwd=tmp_path / "node" / "sub",
+            )
 
     def test_wrapper_and_symlink_split_matches_dependency_needs(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
