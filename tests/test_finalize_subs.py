@@ -159,11 +159,10 @@ class FinalizeSubsTest(unittest.TestCase):
             ):
                 exit_code = finalize_subs.run_subtitle_analysis(
                     [(source_path, "00:00:01:00\t00:00:02:00\t中文\nEnglish line.\n")]
-                )
+            )
 
             self.assertEqual(exit_code, 0)
-            self.assertIn(f"[analysis-start] {source_path}", stdout.getvalue())
-            self.assertIn(f"[analysis-end] {source_path}", stdout.getvalue())
+            self.assertIn(f"[analysis] {source_path}", stdout.getvalue())
             argv = run.call_args.args[0]
             self.assertEqual(argv[:4], ["npx", "tsx", str(watch_ts), "--once"])
             self.assertEqual(argv[5:], ["--type", "subs"])
