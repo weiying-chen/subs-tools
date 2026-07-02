@@ -32,6 +32,10 @@ SECTION_LABELS = {
 }
 SUBTITLE_LABELS = {"字幕：", "字幕:"}
 YELLOW_MARKER_TEXTS = {"XXX"}
+STRAY_IMAGE_CREDIT_TEXTS = {
+    "image created with chatgpt.",
+    "image created with chatgpt",
+}
 WORD_NAMESPACE = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 OFFICE_DRAWING_NAMESPACE = "http://schemas.microsoft.com/office/drawing/2010/main"
 INSERTION_TAGS = {f"{{{WORD_NAMESPACE}}}ins", f"{{{WORD_NAMESPACE}}}moveTo"}
@@ -288,6 +292,11 @@ def _paragraph_has_content(paragraph) -> bool:
     return bool(paragraph.text.strip()) or _paragraph_has_drawing(paragraph)
 
 
+def _is_stray_image_credit_paragraph(paragraph) -> bool:
+    text = re.sub(r"\s+", " ", paragraph.text.strip()).lower()
+    return text in STRAY_IMAGE_CREDIT_TEXTS
+
+
 def _section_kind(paragraph) -> str | None:
     text = paragraph.text.strip()
     if text in SUBTITLE_LABELS:
@@ -389,6 +398,14 @@ def _accepted_revisions_docx_bytes(input_path: Path) -> bytes:
 def remove_sources_from_docx(input_path: Path, output_path: Path) -> None:
     doc = Document(BytesIO(_accepted_revisions_docx_bytes(input_path)))
     _normalize_highlights(doc)
+
+    paragraphs = list(doc.paragraphs)
+    stray_credit_indexes = [
+        idx for idx, paragraph in enumerate(paragraphs) if _is_stray_image_credit_paragraph(paragraph)
+    ]
+    for index in reversed(stray_credit_indexes):
+        _remove_paragraph(paragraphs[index])
+
     paragraphs = list(doc.paragraphs)
     remove_indexes = {
         idx

@@ -3,16 +3,26 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import dataclass
 import sys
 from pathlib import Path
 
 import clean_subs
 import rename_subs
+import thumbnail_subs
 
 
-def finalize_docx(path: Path) -> Path:
+@dataclass(frozen=True)
+class FinalizeResult:
+    final_path: Path
+    thumbnail_path: Path
+
+
+def finalize_docx(path: Path) -> FinalizeResult:
     clean_subs.remove_sources_from_docx(path, path)
-    return rename_subs.rename_docx(path)
+    thumbnail_path = thumbnail_subs.export_thumbnail_from_docx(path)
+    final_path = rename_subs.rename_docx(path)
+    return FinalizeResult(final_path=final_path, thumbnail_path=thumbnail_path)
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -62,14 +72,15 @@ def main(argv: list[str] | None = None) -> int:
             continue
 
         try:
-            final_path = finalize_docx(path)
+            result = finalize_docx(path)
         except FileExistsError as exc:
             print(f"[error] {exc}", file=sys.stderr)
             exit_code = 1
             continue
 
         print(f"[cleaned] {path}")
-        print(f"[renamed] {final_path}")
+        print(f"[thumbnail] {result.thumbnail_path}")
+        print(f"[renamed] {result.final_path}")
 
     return exit_code
 

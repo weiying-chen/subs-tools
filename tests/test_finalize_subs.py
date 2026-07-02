@@ -49,13 +49,17 @@ class FinalizeSubsTest(unittest.TestCase):
 
             with (
                 mock.patch("finalize_subs.clean_subs.remove_sources_from_docx", side_effect=fake_clean),
+                mock.patch("finalize_subs.thumbnail_subs.export_thumbnail_from_docx") as export_thumbnail,
                 mock.patch("finalize_subs.rename_subs.rename_docx") as rename_docx,
             ):
+                export_thumbnail.return_value = Path(tmp_dir) / "sample.png"
                 rename_docx.side_effect = lambda path: Path(tmp_dir) / "sample_final.docx"
 
                 result = finalize_subs.finalize_docx(source)
 
-            self.assertEqual(result, Path(tmp_dir) / "sample_final.docx")
+            self.assertEqual(result.final_path, Path(tmp_dir) / "sample_final.docx")
+            self.assertEqual(result.thumbnail_path, Path(tmp_dir) / "sample.png")
+            export_thumbnail.assert_called_once_with(source)
             rename_docx.assert_called_once_with(source)
 
     def test_main_reports_renamed_not_finalized(self) -> None:
@@ -68,7 +72,10 @@ class FinalizeSubsTest(unittest.TestCase):
                 mock.patch("sys.stdout", stdout),
                 mock.patch(
                     "finalize_subs.finalize_docx",
-                    return_value=Path(tmp_dir) / "sample_final.docx",
+                    return_value=finalize_subs.FinalizeResult(
+                        final_path=Path(tmp_dir) / "sample_final.docx",
+                        thumbnail_path=Path(tmp_dir) / "sample.png",
+                    ),
                 ),
             ):
                 exit_code = finalize_subs.main([str(source)])
@@ -76,6 +83,7 @@ class FinalizeSubsTest(unittest.TestCase):
             self.assertEqual(exit_code, 0)
             output = stdout.getvalue()
             self.assertIn("[cleaned]", output)
+            self.assertIn("[thumbnail]", output)
             self.assertIn("[renamed]", output)
             self.assertNotIn("[finalized]", output)
 

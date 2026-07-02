@@ -137,6 +137,25 @@ class CleanSubsCliTest(unittest.TestCase):
             self.assertFalse(output_doc.paragraphs[3]._p.findall(".//w:shd", {"w": clean_subs.WORD_NAMESPACE}))
             self.assertTrue(output_doc.paragraphs[3]._p.findall(".//w:highlight", {"w": clean_subs.WORD_NAMESPACE}))
 
+    def test_remove_sources_strips_chatgpt_image_credit_and_collapses_blanks(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "input.docx"
+            output_path = Path(tmp_dir) / "output.docx"
+            doc = Document()
+            doc.add_paragraph("Before")
+            doc.add_paragraph("")
+            doc.add_paragraph("Image created with ChatGPT.")
+            doc.add_paragraph("")
+            doc.add_paragraph("")
+            doc.add_paragraph("After")
+            doc.save(input_path)
+
+            clean_subs.remove_sources_from_docx(input_path, output_path)
+
+            texts = [paragraph.text for paragraph in Document(output_path).paragraphs]
+            self.assertNotIn("Image created with ChatGPT.", texts)
+            self.assertEqual(texts, ["Before", "", "After"])
+
     def test_repair_missing_use_local_dpi_namespace(self):
         broken_xml = (
             b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'

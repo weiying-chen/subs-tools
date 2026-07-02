@@ -8,6 +8,7 @@ Subtitle-related tooling in one place.
 - `rename-subs`: rename generated subtitle DOCX files from `_al_el` or `_al_sy` to `_final`.
 - `finalize-subs`: run subtitle cleanup first, then rename the cleaned DOCX to `_final`.
 - `convert-subs`: convert transcript BODY `.txt` files into `.srt` files.
+- `thumbnail_subs.py`: export the DOCX thumbnail image using the English YouTube title.
 - `gen_subs.sh`: generate `_al.docx` outputs from `.txt` + source `.docx`, then crop images in the same directory to 16:9.
 - `setup_subs.py`: extract subtitle rows from docx and write sectioned `.txt` + raw `.baseline.txt`.
 - `crop_subs.py`: center-crop images to exact 16:9 in a directory.
@@ -36,6 +37,12 @@ Convert all non-baseline transcript `.txt` files in the current directory to `.s
 
 ```bash
 /home/weiying/python/subs-tools/convert-subs
+```
+
+Export the first referenced DOCX image using the English part of the YouTube title:
+
+```bash
+python3 /home/weiying/python/subs-tools/thumbnail_subs.py sample_final.docx
 ```
 
 Rename generated subtitle DOCX files without cleaning:
