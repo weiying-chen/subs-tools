@@ -297,6 +297,14 @@ def _is_stray_image_credit_paragraph(paragraph) -> bool:
     return text in STRAY_IMAGE_CREDIT_TEXTS
 
 
+def _image_credit_has_preceding_image(paragraphs, index: int) -> bool:
+    for prev_idx in range(index - 1, -1, -1):
+        if not _paragraph_has_content(paragraphs[prev_idx]):
+            continue
+        return _paragraph_has_drawing(paragraphs[prev_idx])
+    return False
+
+
 def _section_kind(paragraph) -> str | None:
     text = paragraph.text.strip()
     if text in SUBTITLE_LABELS:
@@ -401,7 +409,10 @@ def remove_sources_from_docx(input_path: Path, output_path: Path) -> None:
 
     paragraphs = list(doc.paragraphs)
     stray_credit_indexes = [
-        idx for idx, paragraph in enumerate(paragraphs) if _is_stray_image_credit_paragraph(paragraph)
+        idx
+        for idx, paragraph in enumerate(paragraphs)
+        if _is_stray_image_credit_paragraph(paragraph)
+        and not _image_credit_has_preceding_image(paragraphs, idx)
     ]
     for index in reversed(stray_credit_indexes):
         _remove_paragraph(paragraphs[index])

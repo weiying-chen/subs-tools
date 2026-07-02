@@ -1,4 +1,5 @@
 from io import BytesIO
+import base64
 from pathlib import Path
 import tempfile
 import unittest
@@ -10,6 +11,12 @@ import clean_subs
 from docx import Document
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
+
+
+PNG_BYTES = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/"
+    "l6NqSAAAAABJRU5ErkJggg=="
+)
 
 
 def _shade_paragraph(paragraph, fill: str) -> None:
@@ -155,6 +162,30 @@ class CleanSubsCliTest(unittest.TestCase):
             texts = [paragraph.text for paragraph in Document(output_path).paragraphs]
             self.assertNotIn("Image created with ChatGPT.", texts)
             self.assertEqual(texts, ["Before", "", "After"])
+
+    def test_remove_sources_preserves_chatgpt_credit_under_image_and_strips_duplicate(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            input_path = tmp_path / "input.docx"
+            output_path = tmp_path / "output.docx"
+            image_path = tmp_path / "image.png"
+            image_path.write_bytes(PNG_BYTES)
+            doc = Document()
+            doc.add_paragraph("Before")
+            doc.add_picture(str(image_path))
+            doc.add_paragraph("Image created with ChatGPT.")
+            doc.add_paragraph("")
+            doc.add_paragraph("Image created with ChatGPT.")
+            doc.add_paragraph("字幕：")
+            doc.save(input_path)
+
+            clean_subs.remove_sources_from_docx(input_path, output_path)
+
+            paragraphs = Document(output_path).paragraphs
+            texts = [paragraph.text for paragraph in paragraphs]
+            self.assertEqual(texts.count("Image created with ChatGPT."), 1)
+            credit_index = texts.index("Image created with ChatGPT.")
+            self.assertTrue(paragraphs[credit_index - 1]._p.findall(".//w:drawing", {"w": clean_subs.WORD_NAMESPACE}))
 
     def test_repair_missing_use_local_dpi_namespace(self):
         broken_xml = (
