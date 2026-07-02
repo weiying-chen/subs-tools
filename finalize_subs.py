@@ -7,7 +7,10 @@ from dataclasses import dataclass
 import os
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
+
+from docx import Document
 
 import clean_subs
 import rename_subs
@@ -18,27 +21,45 @@ import thumbnail_subs
 class FinalizeResult:
     final_path: Path
     thumbnail_path: Path
-    analysis_path: Path
+    analysis_text: str
 
 
 def finalize_docx(path: Path) -> FinalizeResult:
     clean_subs.remove_sources_from_docx(path, path)
     thumbnail_path = thumbnail_subs.export_thumbnail_from_docx(path)
-    analysis_path = analysis_text_path_for_docx(path)
+    analysis_text = extract_subtitle_analysis_text(path)
     final_path = rename_subs.rename_docx(path)
     return FinalizeResult(
         final_path=final_path,
         thumbnail_path=thumbnail_path,
-        analysis_path=analysis_path,
+        analysis_text=analysis_text,
     )
 
 
-def analysis_text_path_for_docx(path: Path) -> Path:
-    final_path = rename_subs.final_name_for(path)
-    stem = final_path.stem
-    if stem.endswith(rename_subs.FINAL_SUFFIX):
-        stem = stem[: -len(rename_subs.FINAL_SUFFIX)]
-    return final_path.with_name(f"{stem}.txt")
+def _is_subtitle_label(text: str) -> bool:
+    return text.strip() in clean_subs.SUBTITLE_LABELS
+
+
+def _is_other_section_label(text: str) -> bool:
+    stripped = text.strip()
+    return stripped in clean_subs.SECTION_LABELS and stripped not in clean_subs.SUBTITLE_LABELS
+
+
+def extract_subtitle_analysis_text(path: Path) -> str:
+    lines: list[str] = []
+    in_subtitle_section = False
+    for paragraph in Document(path).paragraphs:
+        text = paragraph.text.strip()
+        if _is_subtitle_label(text):
+            in_subtitle_section = True
+            continue
+        if in_subtitle_section and _is_other_section_label(text):
+            break
+        if not in_subtitle_section:
+            continue
+        if text:
+            lines.append(text)
+    return "\n".join(lines) + ("\n" if lines else "")
 
 
 def _default_watch_ts() -> Path:
@@ -55,32 +76,41 @@ def _watch_workdir(watch_ts: Path) -> Path:
     return watch_ts.parent
 
 
-def run_subtitle_analysis(paths: list[Path]) -> int:
+def run_subtitle_analysis(items: list[tuple[Path, str]]) -> int:
     watch_ts = _default_watch_ts()
     if not watch_ts.exists():
         print(f"[warn] watch.ts not found: {watch_ts}", file=sys.stderr)
         return 1
 
     exit_code = 0
-    for path in paths:
-        if not path.exists():
-            print(f"[warn] analysis text not found: {path}", file=sys.stderr)
+    for source_path, text in items:
+        if not text.strip():
+            print(f"[warn] no subtitle text found: {source_path}", file=sys.stderr)
             exit_code = 1
             continue
 
-        print(f"[analysis] {path}")
-        result = subprocess.run(
-            [
-                "npx",
-                "tsx",
-                str(watch_ts),
-                "--once",
-                str(path),
-                "--type",
-                "subs",
-            ],
-            cwd=_watch_workdir(watch_ts),
-        )
+        print(f"[analysis] {source_path}")
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            suffix=".txt",
+            prefix="finalize-subs-analysis-",
+            delete=True,
+        ) as analysis_file:
+            analysis_file.write(text)
+            analysis_file.flush()
+            result = subprocess.run(
+                [
+                    "npx",
+                    "tsx",
+                    str(watch_ts),
+                    "--once",
+                    analysis_file.name,
+                    "--type",
+                    "subs",
+                ],
+                cwd=_watch_workdir(watch_ts),
+            )
         if result.returncode != 0:
             exit_code = result.returncode
     return exit_code
@@ -118,7 +148,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     exit_code = 0
-    analysis_paths: list[Path] = []
+    analysis_items: list[tuple[Path, str]] = []
     for path in targets:
         if not path.exists():
             print(f"[error] not found: {path}", file=sys.stderr)
@@ -143,10 +173,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"[cleaned] {path}")
         print(f"[exported] {result.thumbnail_path}")
         print(f"[renamed] {result.final_path}")
-        analysis_paths.append(result.analysis_path)
+        analysis_items.append((result.final_path, result.analysis_text))
 
-    if analysis_paths:
-        analysis_exit_code = run_subtitle_analysis(analysis_paths)
+    if analysis_items:
+        analysis_exit_code = run_subtitle_analysis(analysis_items)
         if analysis_exit_code != 0:
             exit_code = analysis_exit_code
     return exit_code
