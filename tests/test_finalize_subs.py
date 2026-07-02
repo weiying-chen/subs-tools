@@ -143,6 +143,7 @@ class FinalizeSubsTest(unittest.TestCase):
             watch_ts.parent.mkdir(parents=True)
             watch_ts.touch()
             source_path = tmp_path / "sample_final.docx"
+            stdout = StringIO()
 
             completed = mock.Mock(returncode=0)
             captured_text = []
@@ -154,12 +155,15 @@ class FinalizeSubsTest(unittest.TestCase):
             with (
                 mock.patch.dict("os.environ", {"SUB_WATCH_TS": str(watch_ts)}),
                 mock.patch("finalize_subs.subprocess.run", side_effect=fake_run) as run,
+                mock.patch("sys.stdout", stdout),
             ):
                 exit_code = finalize_subs.run_subtitle_analysis(
                     [(source_path, "00:00:01:00\t00:00:02:00\t中文\nEnglish line.\n")]
                 )
 
             self.assertEqual(exit_code, 0)
+            self.assertIn(f"[analysis-start] {source_path}", stdout.getvalue())
+            self.assertIn(f"[analysis-end] {source_path}", stdout.getvalue())
             argv = run.call_args.args[0]
             self.assertEqual(argv[:4], ["npx", "tsx", str(watch_ts), "--once"])
             self.assertEqual(argv[5:], ["--type", "subs"])

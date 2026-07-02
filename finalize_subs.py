@@ -89,7 +89,7 @@ def run_subtitle_analysis(items: list[tuple[Path, str]]) -> int:
             exit_code = 1
             continue
 
-        print(f"[analysis] {source_path}")
+        print(f"[analysis-start] {source_path}")
         with tempfile.NamedTemporaryFile(
             mode="w",
             encoding="utf-8",
@@ -111,6 +111,7 @@ def run_subtitle_analysis(items: list[tuple[Path, str]]) -> int:
                 ],
                 cwd=_watch_workdir(watch_ts),
             )
+        print(f"[analysis-end] {source_path}")
         if result.returncode != 0:
             exit_code = result.returncode
     return exit_code
