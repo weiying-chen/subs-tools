@@ -127,10 +127,6 @@ class FinalizeSubsTest(unittest.TestCase):
                     str(text_path),
                     "--type",
                     "subs",
-                    "--max-cps",
-                    "16",
-                    "--min-cps",
-                    "5",
                 ],
                 cwd=tmp_path / "node" / "sub",
             )

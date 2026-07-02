@@ -78,10 +78,6 @@ def run_subtitle_analysis(paths: list[Path]) -> int:
                 str(path),
                 "--type",
                 "subs",
-                "--max-cps",
-                "16",
-                "--min-cps",
-                "5",
             ],
             cwd=_watch_workdir(watch_ts),
         )
