@@ -36,6 +36,13 @@ STRAY_IMAGE_CREDIT_TEXTS = {
     "image created with chatgpt.",
     "image created with chatgpt",
 }
+EDITOR_COLOR_LEGEND_TEXTS = (
+    "顏色的意義",
+    "太長讀不完",
+    "不貼切或不通順",
+    "參考資料沒貼好",
+    "誤譯",
+)
 WORD_NAMESPACE = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 OFFICE_DRAWING_NAMESPACE = "http://schemas.microsoft.com/office/drawing/2010/main"
 INSERTION_TAGS = {f"{{{WORD_NAMESPACE}}}ins", f"{{{WORD_NAMESPACE}}}moveTo"}
@@ -305,6 +312,34 @@ def _image_credit_has_preceding_image(paragraphs, index: int) -> bool:
     return False
 
 
+def _next_content_index(paragraphs, start: int) -> int | None:
+    for idx in range(start, len(paragraphs)):
+        if _paragraph_has_content(paragraphs[idx]):
+            return idx
+    return None
+
+
+def _editor_color_legend_indexes(paragraphs) -> set[int]:
+    remove_indexes: set[int] = set()
+    for idx, paragraph in enumerate(paragraphs):
+        if paragraph.text.strip() != EDITOR_COLOR_LEGEND_TEXTS[0]:
+            continue
+
+        candidate_indexes = [idx]
+        search_start = idx + 1
+        for expected in EDITOR_COLOR_LEGEND_TEXTS[1:]:
+            next_idx = _next_content_index(paragraphs, search_start)
+            if next_idx is None or paragraphs[next_idx].text.strip() != expected:
+                break
+            candidate_indexes.append(next_idx)
+            search_start = next_idx + 1
+        else:
+            next_idx = _next_content_index(paragraphs, search_start)
+            if next_idx is not None and paragraphs[next_idx].text.strip() in SUBTITLE_LABELS:
+                remove_indexes.update(candidate_indexes)
+    return remove_indexes
+
+
 def _section_kind(paragraph) -> str | None:
     text = paragraph.text.strip()
     if text in SUBTITLE_LABELS:
@@ -415,6 +450,10 @@ def remove_sources_from_docx(input_path: Path, output_path: Path) -> None:
         and not _image_credit_has_preceding_image(paragraphs, idx)
     ]
     for index in reversed(stray_credit_indexes):
+        _remove_paragraph(paragraphs[index])
+
+    paragraphs = list(doc.paragraphs)
+    for index in sorted(_editor_color_legend_indexes(paragraphs), reverse=True):
         _remove_paragraph(paragraphs[index])
 
     paragraphs = list(doc.paragraphs)

@@ -187,6 +187,39 @@ class CleanSubsCliTest(unittest.TestCase):
             credit_index = texts.index("Image created with ChatGPT.")
             self.assertTrue(paragraphs[credit_index - 1]._p.findall(".//w:drawing", {"w": clean_subs.WORD_NAMESPACE}))
 
+    def test_remove_sources_strips_editor_color_legend_before_subtitles(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            input_path = tmp_path / "input.docx"
+            output_path = tmp_path / "output.docx"
+            image_path = tmp_path / "image.png"
+            image_path.write_bytes(PNG_BYTES)
+            doc = Document()
+            doc.add_picture(str(image_path))
+            doc.add_paragraph("Image created with ChatGPT.")
+            doc.add_paragraph("")
+            doc.add_paragraph("顏色的意義")
+            doc.add_paragraph("太長讀不完")
+            doc.add_paragraph("不貼切或不通順")
+            doc.add_paragraph("參考資料沒貼好")
+            doc.add_paragraph("誤譯")
+            doc.add_paragraph("")
+            doc.add_paragraph("字幕：")
+            doc.add_paragraph("00:00:01:00\t00:00:02:00\t中文")
+            doc.add_paragraph("English line.")
+            doc.save(input_path)
+
+            clean_subs.remove_sources_from_docx(input_path, output_path)
+
+            texts = [paragraph.text for paragraph in Document(output_path).paragraphs]
+            self.assertIn("Image created with ChatGPT.", texts)
+            self.assertNotIn("顏色的意義", texts)
+            self.assertNotIn("太長讀不完", texts)
+            self.assertNotIn("不貼切或不通順", texts)
+            self.assertNotIn("參考資料沒貼好", texts)
+            self.assertNotIn("誤譯", texts)
+            self.assertIn("字幕：", texts)
+
     def test_repair_missing_use_local_dpi_namespace(self):
         broken_xml = (
             b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
