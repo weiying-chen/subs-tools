@@ -89,6 +89,7 @@ def run_subtitle_analysis(items: list[tuple[Path, str]]) -> int:
             exit_code = 1
             continue
 
+        print()
         print(f"[analysis] {source_path}")
         print()
         with tempfile.NamedTemporaryFile(
