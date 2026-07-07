@@ -26,6 +26,22 @@ class RenameSubsTest(unittest.TestCase):
 
         self.assertEqual(rename_subs.final_name_for(path), Path("sample_final.docx"))
 
+    def test_final_name_replaces_al_shawn_suffix(self) -> None:
+        path = Path("sample_al_Shawn.docx")
+
+        self.assertEqual(rename_subs.final_name_for(path), Path("sample_final.docx"))
+
+    def test_resolve_input_paths_includes_al_shawn_suffix(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            shawn = tmp_path / "sample_al_Shawn.docx"
+            ignored = tmp_path / "sample_al.docx"
+            shawn.touch()
+            ignored.touch()
+
+            with mock.patch("rename_subs.Path.cwd", return_value=tmp_path):
+                self.assertEqual(rename_subs.resolve_input_paths([]), [shawn])
+
     def test_rename_docx_moves_file_to_final_suffix(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             source = Path(tmp_dir) / "sample_al_el.docx"

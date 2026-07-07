@@ -5,7 +5,7 @@ Subtitle-related tooling in one place.
 ## Scripts
 
 - `clean-subs`: clean source markings from DOCX files using the repo venv.
-- `rename-subs`: rename generated subtitle DOCX files from `_al_el` or `_al_sy` to `_final`.
+- `rename-subs`: rename generated subtitle DOCX files from `_al_el`, `_al_sy`, or `_al_Shawn` to `_final`.
 - `finalize-subs`: clean subtitle DOCX files, export thumbnails, rename to `_final`, then run subtitle analysis once.
 - `convert-subs`: convert transcript BODY `.txt` files into `.srt` files.
 - `thumbnail_subs.py`: export the DOCX thumbnail image using the English YouTube title.
