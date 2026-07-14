@@ -18,6 +18,7 @@ INDENT_THRESHOLD_PT = 21.0
 TIMESTAMP_LINE_RE = re.compile(
     r"^(?:[^\t]+\t)?\d{2}:\d{2}:\d{2}:\d{2}\t\d{2}:\d{2}:\d{2}:\d{2}\t"
 )
+IMAGE_NUMBER_RE = re.compile(r"^\d+[.]$")
 SECTION_LABELS = {
     "建議YT標題：",
     "建議YT標題:",
@@ -312,6 +313,16 @@ def _image_credit_has_preceding_image(paragraphs, index: int) -> bool:
     return False
 
 
+def _preceding_image_number_index(paragraphs, index: int) -> int | None:
+    for prev_idx in range(index - 1, -1, -1):
+        if not _paragraph_has_content(paragraphs[prev_idx]):
+            continue
+        if IMAGE_NUMBER_RE.match(paragraphs[prev_idx].text.strip()):
+            return prev_idx
+        return None
+    return None
+
+
 def _next_content_index(paragraphs, start: int) -> int | None:
     for idx in range(start, len(paragraphs)):
         if _paragraph_has_content(paragraphs[idx]):
@@ -443,13 +454,18 @@ def remove_sources_from_docx(input_path: Path, output_path: Path) -> None:
     _normalize_highlights(doc)
 
     paragraphs = list(doc.paragraphs)
-    stray_credit_indexes = [
-        idx
-        for idx, paragraph in enumerate(paragraphs)
-        if _is_stray_image_credit_paragraph(paragraph)
-        and not _image_credit_has_preceding_image(paragraphs, idx)
-    ]
-    for index in reversed(stray_credit_indexes):
+    stray_credit_indexes: set[int] = set()
+    for idx, paragraph in enumerate(paragraphs):
+        if not _is_stray_image_credit_paragraph(paragraph):
+            continue
+        if _image_credit_has_preceding_image(paragraphs, idx):
+            continue
+        stray_credit_indexes.add(idx)
+        number_idx = _preceding_image_number_index(paragraphs, idx)
+        if number_idx is not None:
+            stray_credit_indexes.add(number_idx)
+
+    for index in sorted(stray_credit_indexes, reverse=True):
         _remove_paragraph(paragraphs[index])
 
     paragraphs = list(doc.paragraphs)

@@ -187,6 +187,31 @@ class CleanSubsCliTest(unittest.TestCase):
             credit_index = texts.index("Image created with ChatGPT.")
             self.assertTrue(paragraphs[credit_index - 1]._p.findall(".//w:drawing", {"w": clean_subs.WORD_NAMESPACE}))
 
+    def test_remove_sources_strips_orphan_image_number_with_stray_credit(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            input_path = tmp_path / "input.docx"
+            output_path = tmp_path / "output.docx"
+            image_path = tmp_path / "image.png"
+            image_path.write_bytes(PNG_BYTES)
+            doc = Document()
+            doc.add_paragraph("1.")
+            doc.add_paragraph("")
+            doc.add_paragraph("Image created with ChatGPT.")
+            doc.add_paragraph("")
+            doc.add_paragraph("2.")
+            doc.add_picture(str(image_path))
+            doc.add_paragraph("Image created with ChatGPT.")
+            doc.add_paragraph("字幕：")
+            doc.save(input_path)
+
+            clean_subs.remove_sources_from_docx(input_path, output_path)
+
+            texts = [paragraph.text for paragraph in Document(output_path).paragraphs]
+            self.assertNotIn("1.", texts)
+            self.assertIn("2.", texts)
+            self.assertEqual(texts.count("Image created with ChatGPT."), 1)
+
     def test_remove_sources_strips_editor_color_legend_before_subtitles(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp_path = Path(tmp_dir)
