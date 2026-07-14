@@ -65,7 +65,7 @@ def thumbnail_stem_for_docx(docx_path: Path) -> str:
 
 
 def sanitize_filename(value: str) -> str:
-    cleaned = UNSAFE_FILENAME_RE.sub("_", value)
+    cleaned = UNSAFE_FILENAME_RE.sub("", value)
     cleaned = re.sub(r"\s+", " ", cleaned).strip(" .")
     if not cleaned:
         raise ValueError("thumbnail filename is empty after sanitizing.")

@@ -41,6 +41,12 @@ class ThumbnailSubsTest(unittest.TestCase):
                 "Chinese Medicine Clinic - How TCM Helps Prevent Cancer",
             )
 
+    def test_thumbnail_stem_omits_invalid_title_punctuation(self) -> None:
+        self.assertEqual(
+            thumbnail_subs.sanitize_filename("Does Freedom Shape Our Sense of Beauty?"),
+            "Does Freedom Shape Our Sense of Beauty",
+        )
+
     def test_export_thumbnail_uses_first_referenced_document_image(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             docx_path = Path(tmp_dir) / "sample.docx"
