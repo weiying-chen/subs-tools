@@ -5,6 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
+import xml.etree.ElementTree as ET
 
 from docx import Document
 
@@ -64,6 +65,42 @@ class ThumbnailSubsTest(unittest.TestCase):
             output_path = thumbnail_subs.export_thumbnail_from_docx(docx_path)
 
             self.assertNotEqual(output_path.read_bytes(), stale_bytes)
+
+    def test_export_thumbnail_supports_vml_image_references(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            docx_path = Path(tmp_dir) / "sample.docx"
+            self._write_docx_with_title_and_image(docx_path)
+            ns = {
+                "a": thumbnail_subs.DRAWING_NS,
+                "r": thumbnail_subs.REL_NS,
+                "w": thumbnail_subs.WORD_NS,
+                "v": thumbnail_subs.VML_NS,
+            }
+            with ZipFile(docx_path, "r") as docx:
+                entries = [(info, docx.read(info.filename)) for info in docx.infolist()]
+                document_xml = docx.read("word/document.xml")
+            root = ET.fromstring(document_xml)
+            blip = root.find(".//a:blip", ns)
+            rel_id = blip.get(f"{{{thumbnail_subs.REL_NS}}}embed")
+            body = root.find(".//w:body", ns)
+            for paragraph in list(body.findall("w:p", ns)):
+                if paragraph.find(".//a:blip", ns) is not None:
+                    body.remove(paragraph)
+            paragraph = ET.SubElement(body, f"{{{thumbnail_subs.WORD_NS}}}p")
+            run = ET.SubElement(paragraph, f"{{{thumbnail_subs.WORD_NS}}}r")
+            pict = ET.SubElement(run, f"{{{thumbnail_subs.WORD_NS}}}pict")
+            image_data = ET.SubElement(pict, f"{{{thumbnail_subs.VML_NS}}}imagedata")
+            image_data.set(f"{{{thumbnail_subs.REL_NS}}}id", rel_id)
+            updated_xml = ET.tostring(root, encoding="utf-8", xml_declaration=True)
+            with ZipFile(docx_path, "w", compression=ZIP_DEFLATED) as docx:
+                for info, data in entries:
+                    if info.filename == "word/document.xml":
+                        data = updated_xml
+                    docx.writestr(info, data)
+
+            output_path = thumbnail_subs.export_thumbnail_from_docx(docx_path)
+
+            self.assertEqual(output_path.read_bytes(), PNG_BYTES)
 
 
 if __name__ == "__main__":

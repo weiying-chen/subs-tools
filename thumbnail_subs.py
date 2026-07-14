@@ -16,7 +16,8 @@ WORD_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 DRAWING_NS = "http://schemas.openxmlformats.org/drawingml/2006/main"
 REL_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 PKG_REL_NS = "http://schemas.openxmlformats.org/package/2006/relationships"
-NS = {"w": WORD_NS, "a": DRAWING_NS, "r": REL_NS, "rel": PKG_REL_NS}
+VML_NS = "urn:schemas-microsoft-com:vml"
+NS = {"w": WORD_NS, "a": DRAWING_NS, "r": REL_NS, "rel": PKG_REL_NS, "v": VML_NS}
 YT_TITLE_LABELS = (
     "建議YT標題：",
     "建議YT標題:",
@@ -89,8 +90,11 @@ def _relationships_by_id(docx: ZipFile) -> dict[str, str]:
 def _first_document_image_name(docx: ZipFile) -> str | None:
     root = ET.fromstring(docx.read("word/document.xml"))
     relationships = _relationships_by_id(docx)
-    for blip in root.findall(".//a:blip", NS):
-        rel_id = blip.get(f"{{{REL_NS}}}embed")
+    for element, attribute in [
+        *[(blip, f"{{{REL_NS}}}embed") for blip in root.findall(".//a:blip", NS)],
+        *[(image_data, f"{{{REL_NS}}}id") for image_data in root.findall(".//v:imagedata", NS)],
+    ]:
+        rel_id = element.get(attribute)
         if not rel_id:
             continue
         target = relationships.get(rel_id)
