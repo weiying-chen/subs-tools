@@ -212,6 +212,34 @@ class CleanSubsCliTest(unittest.TestCase):
             self.assertIn("2.", texts)
             self.assertEqual(texts.count("Image created with ChatGPT."), 1)
 
+    def test_remove_sources_strips_empty_thumbnail_number_section(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "input.docx"
+            output_path = Path(tmp_dir) / "output.docx"
+            doc = Document()
+            doc.add_paragraph("選圖：")
+            doc.add_paragraph("1")
+            doc.add_paragraph("")
+            doc.add_paragraph("2")
+            doc.add_paragraph("")
+            doc.add_paragraph("字幕：")
+            doc.add_paragraph("00:00:01:00\t00:00:02:00\t中文")
+            doc.add_paragraph("English line.")
+            doc.save(input_path)
+
+            clean_subs.remove_sources_from_docx(input_path, output_path)
+
+            texts = [paragraph.text for paragraph in Document(output_path).paragraphs]
+            self.assertEqual(
+                texts,
+                [
+                    "選圖：",
+                    "字幕：",
+                    "00:00:01:00\t00:00:02:00\t中文",
+                    "English line.",
+                ],
+            )
+
     def test_remove_sources_strips_editor_color_legend_before_subtitles(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp_path = Path(tmp_dir)

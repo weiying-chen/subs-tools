@@ -18,7 +18,7 @@ INDENT_THRESHOLD_PT = 21.0
 TIMESTAMP_LINE_RE = re.compile(
     r"^(?:[^\t]+\t)?\d{2}:\d{2}:\d{2}:\d{2}\t\d{2}:\d{2}:\d{2}:\d{2}\t"
 )
-IMAGE_NUMBER_RE = re.compile(r"^\d+[.]$")
+IMAGE_NUMBER_RE = re.compile(r"^\d+[.]?$")
 SECTION_LABELS = {
     "建議YT標題：",
     "建議YT標題:",
@@ -351,6 +351,38 @@ def _editor_color_legend_indexes(paragraphs) -> set[int]:
     return remove_indexes
 
 
+def _empty_thumbnail_section_indexes(paragraphs) -> set[int]:
+    remove_indexes: set[int] = set()
+    for idx, paragraph in enumerate(paragraphs):
+        if paragraph.text.strip() not in {"選圖：", "選圖:"}:
+            continue
+
+        candidate_indexes: list[int] = []
+        cursor = idx + 1
+        while cursor < len(paragraphs):
+            if not _paragraph_has_content(paragraphs[cursor]):
+                candidate_indexes.append(cursor)
+                cursor += 1
+                continue
+
+            text = paragraphs[cursor].text.strip()
+            if text in SUBTITLE_LABELS:
+                number_indexes = [
+                    candidate_idx
+                    for candidate_idx in candidate_indexes
+                    if _paragraph_has_content(paragraphs[candidate_idx])
+                ]
+                if number_indexes:
+                    remove_indexes.update(candidate_indexes)
+                break
+
+            if not IMAGE_NUMBER_RE.match(text):
+                break
+            candidate_indexes.append(cursor)
+            cursor += 1
+    return remove_indexes
+
+
 def _section_kind(paragraph) -> str | None:
     text = paragraph.text.strip()
     if text in SUBTITLE_LABELS:
@@ -470,6 +502,10 @@ def remove_sources_from_docx(input_path: Path, output_path: Path) -> None:
 
     paragraphs = list(doc.paragraphs)
     for index in sorted(_editor_color_legend_indexes(paragraphs), reverse=True):
+        _remove_paragraph(paragraphs[index])
+
+    paragraphs = list(doc.paragraphs)
+    for index in sorted(_empty_thumbnail_section_indexes(paragraphs), reverse=True):
         _remove_paragraph(paragraphs[index])
 
     paragraphs = list(doc.paragraphs)
