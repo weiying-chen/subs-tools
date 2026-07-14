@@ -88,6 +88,39 @@ class FinalizeSubsTest(unittest.TestCase):
             export_thumbnail.assert_called_once_with(source)
             rename_docx.assert_called_once_with(source)
 
+    def test_finalize_docx_continues_when_thumbnail_is_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            source = Path(tmp_dir) / "sample_al_el.docx"
+            Document().save(source)
+
+            def fake_clean(input_path: Path, output_path: Path) -> None:
+                doc = Document()
+                doc.add_paragraph("字幕：")
+                doc.add_paragraph("00:00:01:00\t00:00:02:00\t中文")
+                doc.add_paragraph("English line.")
+                doc.save(output_path)
+
+            with (
+                mock.patch("finalize_subs.clean_subs.remove_sources_from_docx", side_effect=fake_clean),
+                mock.patch(
+                    "finalize_subs.thumbnail_subs.export_thumbnail_from_docx",
+                    side_effect=ValueError("no document image found"),
+                ) as export_thumbnail,
+                mock.patch("finalize_subs.rename_subs.rename_docx") as rename_docx,
+            ):
+                rename_docx.side_effect = lambda path: Path(tmp_dir) / "sample_final.docx"
+
+                result = finalize_subs.finalize_docx(source)
+
+            self.assertEqual(result.final_path, Path(tmp_dir) / "sample_final.docx")
+            self.assertIsNone(result.thumbnail_path)
+            self.assertEqual(
+                result.analysis_text,
+                "00:00:01:00\t00:00:02:00\t中文\nEnglish line.\n",
+            )
+            export_thumbnail.assert_called_once_with(source)
+            rename_docx.assert_called_once_with(source)
+
     def test_extract_subtitle_analysis_text_reads_only_subtitle_section(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             source = Path(tmp_dir) / "sample.docx"

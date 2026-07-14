@@ -20,13 +20,17 @@ import thumbnail_subs
 @dataclass(frozen=True)
 class FinalizeResult:
     final_path: Path
-    thumbnail_path: Path
+    thumbnail_path: Path | None
     analysis_text: str
 
 
 def finalize_docx(path: Path) -> FinalizeResult:
     clean_subs.remove_sources_from_docx(path, path)
-    thumbnail_path = thumbnail_subs.export_thumbnail_from_docx(path)
+    try:
+        thumbnail_path = thumbnail_subs.export_thumbnail_from_docx(path)
+    except ValueError as exc:
+        print(f"[warn] {exc}", file=sys.stderr)
+        thumbnail_path = None
     analysis_text = extract_subtitle_analysis_text(path)
     final_path = rename_subs.rename_docx(path)
     return FinalizeResult(
@@ -173,7 +177,8 @@ def main(argv: list[str] | None = None) -> int:
             continue
 
         print(f"[cleaned] {path}")
-        print(f"[exported] {result.thumbnail_path}")
+        if result.thumbnail_path is not None:
+            print(f"[exported] {result.thumbnail_path}")
         print(f"[renamed] {result.final_path}")
         analysis_items.append((result.final_path, result.analysis_text))
 
