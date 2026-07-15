@@ -11,6 +11,7 @@ import clean_subs
 from docx import Document
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
+from docx.shared import Pt
 
 
 PNG_BYTES = base64.b64decode(
@@ -271,6 +272,33 @@ class CleanSubsCliTest(unittest.TestCase):
                     paragraph._p.findall(".//w:drawing", {"w": clean_subs.WORD_NAMESPACE})
                     for paragraph in paragraphs
                 )
+            )
+
+    def test_remove_sources_keeps_blank_before_thumbnail_label_after_source_removal(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "input.docx"
+            output_path = Path(tmp_dir) / "output.docx"
+            doc = Document()
+            doc.add_paragraph("閱讀一本書，真的能帶來改變嗎？")
+            doc.add_paragraph("")
+            source = doc.add_paragraph("Source reference")
+            source.paragraph_format.left_indent = Pt(24)
+            doc.add_paragraph("")
+            doc.add_paragraph("選圖：")
+            doc.add_paragraph("字幕：")
+            doc.save(input_path)
+
+            clean_subs.remove_sources_from_docx(input_path, output_path)
+
+            texts = [paragraph.text for paragraph in Document(output_path).paragraphs]
+            self.assertEqual(
+                texts,
+                [
+                    "閱讀一本書，真的能帶來改變嗎？",
+                    "",
+                    "選圖：",
+                    "字幕：",
+                ],
             )
 
     def test_remove_sources_strips_editor_color_legend_before_subtitles(self):

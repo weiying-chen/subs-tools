@@ -32,6 +32,7 @@ SECTION_LABELS = {
     "字幕:",
 }
 SUBTITLE_LABELS = {"字幕：", "字幕:"}
+THUMBNAIL_LABELS = {"選圖：", "選圖:"}
 YELLOW_MARKER_TEXTS = {"XXX"}
 STRAY_IMAGE_CREDIT_TEXTS = {
     "image created with chatgpt.",
@@ -394,6 +395,18 @@ def _section_kind(paragraph) -> str | None:
     return None
 
 
+def _ensure_blank_before_labels(doc: Document, labels: set[str]) -> None:
+    paragraphs = list(doc.paragraphs)
+    for idx, paragraph in enumerate(paragraphs):
+        if paragraph.text.strip() not in labels:
+            continue
+        if idx == 0:
+            continue
+        if not _paragraph_has_content(paragraphs[idx - 1]):
+            continue
+        paragraph.insert_paragraph_before("")
+
+
 def _should_restore_yellow_highlight(paragraph) -> bool:
     text = paragraph.text.strip()
     if not text:
@@ -614,6 +627,8 @@ def remove_sources_from_docx(input_path: Path, output_path: Path) -> None:
 
     for index in reversed(subtitle_blank_indexes):
         _remove_paragraph(paragraphs[index])
+
+    _ensure_blank_before_labels(doc, THUMBNAIL_LABELS)
 
     paragraphs = list(doc.paragraphs)
     repeated_blank_indexes = []
