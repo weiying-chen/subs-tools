@@ -351,34 +351,36 @@ def _editor_color_legend_indexes(paragraphs) -> set[int]:
     return remove_indexes
 
 
-def _empty_thumbnail_section_indexes(paragraphs) -> set[int]:
+def _thumbnail_section_cleanup_indexes(paragraphs) -> set[int]:
     remove_indexes: set[int] = set()
     for idx, paragraph in enumerate(paragraphs):
         if paragraph.text.strip() not in {"選圖：", "選圖:"}:
             continue
 
-        candidate_indexes: list[int] = []
+        section_indexes: list[int] = []
+        number_indexes: list[int] = []
+        meaningful_indexes: list[int] = []
         cursor = idx + 1
         while cursor < len(paragraphs):
+            text = paragraphs[cursor].text.strip()
+            if text in SUBTITLE_LABELS:
+                remove_indexes.update(number_indexes)
+                if number_indexes and not meaningful_indexes:
+                    remove_indexes.update(section_indexes)
+                break
+            if text in SECTION_LABELS:
+                remove_indexes.update(number_indexes)
+                break
+
+            section_indexes.append(cursor)
             if not _paragraph_has_content(paragraphs[cursor]):
-                candidate_indexes.append(cursor)
                 cursor += 1
                 continue
 
-            text = paragraphs[cursor].text.strip()
-            if text in SUBTITLE_LABELS:
-                number_indexes = [
-                    candidate_idx
-                    for candidate_idx in candidate_indexes
-                    if _paragraph_has_content(paragraphs[candidate_idx])
-                ]
-                if number_indexes:
-                    remove_indexes.update(candidate_indexes)
-                break
-
-            if not IMAGE_NUMBER_RE.match(text):
-                break
-            candidate_indexes.append(cursor)
+            if IMAGE_NUMBER_RE.match(text):
+                number_indexes.append(cursor)
+            else:
+                meaningful_indexes.append(cursor)
             cursor += 1
     return remove_indexes
 
@@ -505,7 +507,7 @@ def remove_sources_from_docx(input_path: Path, output_path: Path) -> None:
         _remove_paragraph(paragraphs[index])
 
     paragraphs = list(doc.paragraphs)
-    for index in sorted(_empty_thumbnail_section_indexes(paragraphs), reverse=True):
+    for index in sorted(_thumbnail_section_cleanup_indexes(paragraphs), reverse=True):
         _remove_paragraph(paragraphs[index])
 
     paragraphs = list(doc.paragraphs)

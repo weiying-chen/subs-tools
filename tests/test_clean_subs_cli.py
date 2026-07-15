@@ -240,6 +240,39 @@ class CleanSubsCliTest(unittest.TestCase):
                 ],
             )
 
+    def test_remove_sources_strips_thumbnail_number_before_image(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            input_path = tmp_path / "input.docx"
+            output_path = tmp_path / "output.docx"
+            image_path = tmp_path / "image.png"
+            image_path.write_bytes(PNG_BYTES)
+            doc = Document()
+            doc.add_paragraph("選圖：")
+            doc.add_paragraph("")
+            doc.add_paragraph("2.")
+            doc.add_paragraph("")
+            doc.add_picture(str(image_path))
+            doc.add_paragraph("Image created with ChatGPT.")
+            doc.add_paragraph("")
+            doc.add_paragraph("字幕：")
+            doc.add_paragraph("00:00:01:00\t00:00:02:00\t中文")
+            doc.add_paragraph("English line.")
+            doc.save(input_path)
+
+            clean_subs.remove_sources_from_docx(input_path, output_path)
+
+            paragraphs = Document(output_path).paragraphs
+            texts = [paragraph.text for paragraph in paragraphs]
+            self.assertNotIn("2.", texts)
+            self.assertIn("Image created with ChatGPT.", texts)
+            self.assertTrue(
+                any(
+                    paragraph._p.findall(".//w:drawing", {"w": clean_subs.WORD_NAMESPACE})
+                    for paragraph in paragraphs
+                )
+            )
+
     def test_remove_sources_strips_editor_color_legend_before_subtitles(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp_path = Path(tmp_dir)
