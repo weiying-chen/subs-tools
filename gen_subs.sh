@@ -14,7 +14,6 @@ Environment overrides:
   GENERATE_SUBS_SCRIPT   default: $HOME/python/word/generate_subs.py
   GENERATE_SUBS_PYTHON   default: $HOME/python/word/.venv/bin/python
   GENERATE_SUBS_TEMPLATE default: $HOME/python/word/templates/subs_template.docx
-  GENERATE_SUBS_CROP_SCRIPT default: $HOME/python/subs-tools/crop_subs.py
 EOF2
 }
 
@@ -27,7 +26,6 @@ TARGET_DIR="${1:-.}"
 SCRIPT_PATH="${GENERATE_SUBS_SCRIPT:-$HOME/python/word/generate_subs.py}"
 PYTHON_BIN="${GENERATE_SUBS_PYTHON:-$HOME/python/word/.venv/bin/python}"
 TEMPLATE_PATH="${GENERATE_SUBS_TEMPLATE:-$HOME/python/word/templates/subs_template.docx}"
-CROP_SCRIPT_PATH="${GENERATE_SUBS_CROP_SCRIPT:-$HOME/python/subs-tools/crop_subs.py}"
 OUTPUT_DIR="${TARGET_DIR%/}/output"
 
 if [[ ! -d "$TARGET_DIR" ]]; then
@@ -50,11 +48,6 @@ if [[ ! -f "$TEMPLATE_PATH" ]]; then
   exit 1
 fi
 
-if [[ ! -f "$CROP_SCRIPT_PATH" ]]; then
-  echo "[error] crop script not found: $CROP_SCRIPT_PATH" >&2
-  exit 1
-fi
-
 mkdir -p "$OUTPUT_DIR"
 
 shopt -s nullglob
@@ -70,7 +63,6 @@ fi
 processed=0
 skipped=0
 failed=0
-thumbnails_to_copy=()
 
 for txt in "${txt_files[@]}"; do
   txt_name="$(basename "$txt")"
@@ -92,58 +84,13 @@ for txt in "${txt_files[@]}"; do
     generated_path="${out%.docx}_al.docx"
     echo "[created] $(basename "$generated_path")"
     ((processed+=1))
-
-    while IFS= read -r thumb; do
-      thumb="${thumb#THUMBNAIL:}"
-      thumb="${thumb# }"
-      thumb="$(printf '%s' "$thumb" | sed -E 's/[[:space:]]*\*+[[:space:]]*$//')"
-      [[ -z "$thumb" ]] && continue
-      thumbnails_to_copy+=("$thumb")
-    done < <(grep -E '^THUMBNAIL:' "$txt" || true)
   else
     ((failed+=1))
     printf '%s\n' "$output" >&2
   fi
 done
 
-crop_failed=0
-if crop_output="$($PYTHON_BIN "$CROP_SCRIPT_PATH" "$TARGET_DIR" 2>&1)"; then
-  while IFS= read -r line; do
-    [[ -z "$line" ]] && continue
-    cleaned="$line"
-    cleaned="${cleaned#\[wrote\] }"
-    cleaned="${cleaned#${TARGET_DIR%/}/}"
-    echo "[cropped] $cleaned"
-  done <<< "$crop_output"
-else
-  crop_failed=1
-  while IFS= read -r line; do
-    [[ -z "$line" ]] && continue
-    echo "[cropped] $line" >&2
-  done <<< "$crop_output"
-fi
-
-copied_png=0
-if [[ ${#thumbnails_to_copy[@]} -gt 0 ]]; then
-  declare -A seen=()
-  for thumb in "${thumbnails_to_copy[@]}"; do
-    [[ -n "${seen[$thumb]+x}" ]] && continue
-    seen[$thumb]=1
-    src_png="${TARGET_DIR%/}/$thumb"
-    if [[ ! -f "$src_png" ]]; then
-      continue
-    fi
-    dest_png="${OUTPUT_DIR}/$(basename "$thumb")"
-    cp -f -- "$src_png" "$dest_png"
-    echo "[copied] $(basename "$thumb")"
-    ((copied_png+=1))
-  done
-fi
-
-echo "[done] generated: $processed, skipped: $skipped, copied png: $copied_png, failed: $failed, crop_failed: $crop_failed"
+echo "[done] generated: $processed, skipped: $skipped, failed: $failed"
 if (( failed > 0 )); then
-  exit 1
-fi
-if (( crop_failed > 0 )); then
   exit 1
 fi

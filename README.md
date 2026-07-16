@@ -9,7 +9,7 @@ Subtitle-related tooling in one place.
 - `finalize-subs`: clean subtitle DOCX files, export thumbnails, rename to `_final`, then run subtitle analysis once.
 - `convert-subs`: convert transcript BODY `.txt` files into `.srt` files.
 - `thumbnail_subs.py`: export the DOCX thumbnail image using the English YouTube title.
-- `gen_subs.sh`: generate `_al.docx` outputs from `.txt` + source `.docx`, then crop images in the same directory to 16:9.
+- `gen_subs.sh`: generate `_al.docx` outputs from `.txt` + source `.docx`.
 - `setup_subs.py`: extract subtitle rows from docx and write sectioned `.txt` + raw `.baseline.txt`.
 - `crop_subs.py`: center-crop images to exact 16:9 in a directory.
 
