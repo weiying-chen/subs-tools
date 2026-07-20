@@ -60,6 +60,11 @@ CHANGE_TAGS = {
     f"{{{WORD_NAMESPACE}}}moveToRangeStart",
     f"{{{WORD_NAMESPACE}}}moveToRangeEnd",
 }
+STALE_REVISION_MARKER_TAGS = {
+    f"{{{WORD_NAMESPACE}}}customXmlDelRangeStart",
+    f"{{{WORD_NAMESPACE}}}customXmlDelRangeEnd",
+}
+RSID_DEL_ATTRIBUTE = f"{{{WORD_NAMESPACE}}}rsidDel"
 TRACK_REVISIONS_TAG = f"{{{WORD_NAMESPACE}}}trackRevisions"
 REVISION_XML_BASENAMES = {
     "document.xml",
@@ -448,9 +453,16 @@ def _normalize_highlights(doc: Document) -> None:
 
 def _rewrite_revision_children(element) -> bool:
     changed = False
+    if RSID_DEL_ATTRIBUTE in element.attrib:
+        del element.attrib[RSID_DEL_ATTRIBUTE]
+        changed = True
     idx = 0
     while idx < len(element):
         child = element[idx]
+        if child.tag in STALE_REVISION_MARKER_TAGS:
+            element.remove(child)
+            changed = True
+            continue
         if child.tag in INSERTION_TAGS:
             grandchildren = list(child)
             element.remove(child)

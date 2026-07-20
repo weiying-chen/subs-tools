@@ -11,6 +11,43 @@ import clean_subs
 
 
 class CleanSubsHighlightTest(unittest.TestCase):
+    def test_accepts_custom_xml_deletion_markers(self) -> None:
+        xml = b'''<?xml version="1.0" encoding="UTF-8"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:p w:rsidDel="12345678">
+      <w:customXmlDelRangeStart w:id="1" w:author="Editor"/>
+      <w:r><w:t>English line.</w:t></w:r>
+      <w:customXmlDelRangeEnd w:id="1"/>
+    </w:p>
+  </w:body>
+</w:document>
+'''
+
+        root = ET.fromstring(xml)
+        clean_subs._accept_revisions_in_tree(root)
+
+        self.assertEqual(
+            ''.join(root.itertext()).replace("\n", "").replace(" ", ""),
+            "Englishline.",
+        )
+        self.assertEqual(
+            root.find(".//w:p", {"w": clean_subs.WORD_NAMESPACE}).attrib,
+            {},
+        )
+        self.assertIsNone(
+            root.find(
+                ".//w:customXmlDelRangeStart",
+                {"w": clean_subs.WORD_NAMESPACE},
+            )
+        )
+        self.assertIsNone(
+            root.find(
+                ".//w:customXmlDelRangeEnd",
+                {"w": clean_subs.WORD_NAMESPACE},
+            )
+        )
+
     def test_strips_run_shading_from_document_xml_bytes(self) -> None:
         xml = b"""<?xml version="1.0" encoding="UTF-8"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
