@@ -88,6 +88,27 @@ class ConvertSubsTest(unittest.TestCase):
             ),
         )
 
+    def test_build_srt_keeps_timestamp_when_source_text_is_empty(self) -> None:
+        text = "\n".join(
+            [
+                "BODY:",
+                "XXX 00:30:40:08\t00:30:41:09",
+                "I'd accumulated notes on around 400 or 500 patients.",
+            ]
+        )
+
+        self.assertEqual(
+            convert_subs.build_srt(text, 30),
+            "\n".join(
+                [
+                    "1",
+                    "00:30:40,267 --> 00:30:41,300",
+                    "I'd accumulated notes on around 400 or 500 patients.",
+                    "",
+                ]
+            ),
+        )
+
     def test_build_srt_skips_xxx_without_timestamp(self) -> None:
         text = "\n".join(
             [
