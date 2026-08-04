@@ -10,6 +10,8 @@ from docx import Document
 
 import finalize_subs
 import rename_subs
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
 
 
 class RenameSubsTest(unittest.TestCase):
@@ -148,6 +150,29 @@ class FinalizeSubsTest(unittest.TestCase):
                         "",
                     ]
                 ),
+            )
+
+    def test_extract_subtitle_analysis_text_reads_content_controls(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            source = Path(tmp_dir) / "sample.docx"
+            document = Document()
+            document.add_paragraph("字幕：")
+            paragraph = document.add_paragraph("Did ")
+            content_control = OxmlElement("w:sdt")
+            content = OxmlElement("w:sdtContent")
+            run = OxmlElement("w:r")
+            text = OxmlElement("w:t")
+            text.set(qn("xml:space"), "preserve")
+            text.text = "we have good experiences together?"
+            run.append(text)
+            content.append(run)
+            content_control.append(content)
+            paragraph._p.append(content_control)
+            document.save(source)
+
+            self.assertEqual(
+                finalize_subs.extract_subtitle_analysis_text(source),
+                "Did we have good experiences together?\n",
             )
 
     def test_main_reports_renamed_not_finalized(self) -> None:

@@ -49,6 +49,8 @@ WORD_NAMESPACE = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 OFFICE_DRAWING_NAMESPACE = "http://schemas.microsoft.com/office/drawing/2010/main"
 INSERTION_TAGS = {f"{{{WORD_NAMESPACE}}}ins", f"{{{WORD_NAMESPACE}}}moveTo"}
 DELETION_TAGS = {f"{{{WORD_NAMESPACE}}}del", f"{{{WORD_NAMESPACE}}}moveFrom"}
+CONTENT_CONTROL_TAG = f"{{{WORD_NAMESPACE}}}sdt"
+CONTENT_CONTROL_CONTENT_TAG = f"{{{WORD_NAMESPACE}}}sdtContent"
 CHANGE_TAGS = {
     f"{{{WORD_NAMESPACE}}}pPrChange",
     f"{{{WORD_NAMESPACE}}}rPrChange",
@@ -462,6 +464,15 @@ def _rewrite_revision_children(element) -> bool:
         if child.tag in STALE_REVISION_MARKER_TAGS:
             element.remove(child)
             changed = True
+            continue
+        if child.tag == CONTENT_CONTROL_TAG:
+            content = child.find(CONTENT_CONTROL_CONTENT_TAG)
+            grandchildren = list(content) if content is not None else []
+            element.remove(child)
+            for offset, grandchild in enumerate(grandchildren):
+                element.insert(idx + offset, grandchild)
+            changed = True
+            idx += len(grandchildren)
             continue
         if child.tag in INSERTION_TAGS:
             grandchildren = list(child)

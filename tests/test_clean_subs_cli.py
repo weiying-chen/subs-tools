@@ -468,6 +468,44 @@ class CleanSubsCliTest(unittest.TestCase):
             self.assertNotIn(b"<w:ins", document_xml)
             self.assertNotIn(b"<w:del", document_xml)
 
+    def test_remove_sources_keeps_inserted_text_inside_content_control(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "input.docx"
+            output_path = Path(tmp_dir) / "output.docx"
+            doc = Document()
+            doc.add_paragraph("字幕：")
+            doc.add_paragraph("placeholder")
+            doc.save(input_path)
+
+            ns = {"w": clean_subs.WORD_NAMESPACE}
+            with ZipFile(input_path, "r") as zin:
+                entries = [(info, zin.read(info.filename)) for info in zin.infolist()]
+                root = ET.fromstring(zin.read("word/document.xml"))
+
+            paragraph = root.findall(".//w:body/w:p", ns)[1]
+            for child in list(paragraph):
+                paragraph.remove(child)
+            control = ET.SubElement(paragraph, f"{{{clean_subs.WORD_NAMESPACE}}}sdt")
+            content = ET.SubElement(control, f"{{{clean_subs.WORD_NAMESPACE}}}sdtContent")
+            inserted = ET.SubElement(content, f"{{{clean_subs.WORD_NAMESPACE}}}ins")
+            run = ET.SubElement(inserted, f"{{{clean_subs.WORD_NAMESPACE}}}r")
+            text = ET.SubElement(run, f"{{{clean_subs.WORD_NAMESPACE}}}t")
+            text.text = "Replacement translation."
+
+            updated_xml = ET.tostring(root, encoding="utf-8", xml_declaration=True)
+            with ZipFile(input_path, "w", compression=ZIP_DEFLATED) as zout:
+                for info, data in entries:
+                    if info.filename == "word/document.xml":
+                        data = updated_xml
+                    zout.writestr(info, data)
+
+            clean_subs.remove_sources_from_docx(input_path, output_path)
+
+            cleaned_text = "\n".join(
+                paragraph.text for paragraph in Document(output_path).paragraphs
+            )
+            self.assertIn("Replacement translation.", cleaned_text)
+
     def test_accepting_revisions_drops_leading_inserted_break_runs(self):
         root = ET.fromstring(
             b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'

@@ -11,6 +11,7 @@ import tempfile
 from pathlib import Path
 
 from docx import Document
+from docx.oxml.ns import qn
 
 import clean_subs
 import rename_subs
@@ -49,11 +50,23 @@ def _is_other_section_label(text: str) -> bool:
     return stripped in clean_subs.SECTION_LABELS and stripped not in clean_subs.SUBTITLE_LABELS
 
 
+def _visible_paragraph_text(paragraph) -> str:
+    parts: list[str] = []
+    for element in paragraph._p.iter():
+        if element.tag == qn("w:t"):
+            parts.append(element.text or "")
+        elif element.tag == qn("w:tab"):
+            parts.append("\t")
+        elif element.tag in {qn("w:br"), qn("w:cr")}:
+            parts.append("\n")
+    return "".join(parts)
+
+
 def extract_subtitle_analysis_text(path: Path) -> str:
     lines: list[str] = []
     in_subtitle_section = False
     for paragraph in Document(path).paragraphs:
-        text = paragraph.text.strip()
+        text = _visible_paragraph_text(paragraph).strip()
         if _is_subtitle_label(text):
             in_subtitle_section = True
             continue
