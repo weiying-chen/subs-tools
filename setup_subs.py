@@ -3,12 +3,20 @@ from __future__ import annotations
 
 import argparse
 import re
+import shutil
+import subprocess
+import sys
+import urllib.error
+import urllib.parse
+import urllib.request
 import xml.etree.ElementTree as ET
 import zipfile
 from pathlib import Path
 
 W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 NS = {"w": W_NS}
+R_NS = "http://schemas.openxmlformats.org/package/2006/relationships"
+R_NS_MAP = {"r": R_NS}
 
 # In current files, yellow-highlighted runs often store: <start><end><zh_text>
 HIGHLIGHTED_LINE_RE = re.compile(
@@ -22,12 +30,117 @@ PARAGRAPH_COMPACT_LINE_RE = re.compile(
     r"^(\d{2}:\d{2}:\d{2}:\d{2})(\d{2}:\d{2}:\d{2}:\d{2})(.+)$"
 )
 HAS_CHINESE_RE = re.compile(r"[\u4e00-\u9fff]")
+URL_RE = re.compile(r"https?://[^\s<>()\"']+")
+YOUTUBE_ID_RE = re.compile(
+    r'\\"?YTID\\"?\s*:\s*\\"?([A-Za-z0-9_-]{11})\\"?'
+)
+NEWS_ID_RE = re.compile(r'\\"?NewsID\\"?\s*:\s*(\d+)')
+NEWS_JSON_RE = re.compile(r"var\s+newsJson\s*=\s*'([^\r\n]*)")
 
 
 def load_docx_root(docx_path: Path) -> ET.Element:
     with zipfile.ZipFile(docx_path) as zf:
         xml = zf.read("word/document.xml")
     return ET.fromstring(xml)
+
+
+def find_first_url_in_root(root: ET.Element) -> str:
+    for para in root.findall(".//w:p", NS):
+        text = "".join(node.text or "" for node in para.findall(".//w:t", NS))
+        match = URL_RE.search(text)
+        if match:
+            return match.group(0).rstrip(".,;:!?)）]}")
+    return ""
+
+
+def extract_docx_hyperlink_urls(docx_path: Path) -> list[str]:
+    with zipfile.ZipFile(docx_path) as zf:
+        try:
+            rels_xml = zf.read("word/_rels/document.xml.rels")
+        except KeyError:
+            return []
+
+    root = ET.fromstring(rels_xml)
+    urls: list[str] = []
+    for rel in root.findall(".//r:Relationship", R_NS_MAP):
+        target = (rel.get("Target") or "").strip()
+        target_mode = (rel.get("TargetMode") or "").strip()
+        if target_mode.lower() == "external" and target.lower().startswith(
+            ("http://", "https://")
+        ):
+            urls.append(target)
+    return urls
+
+
+def find_first_docx_url(docx_path: Path) -> str:
+    first_url = find_first_url_in_root(load_docx_root(docx_path))
+    if first_url:
+        return first_url
+    hyperlink_urls = extract_docx_hyperlink_urls(docx_path)
+    return hyperlink_urls[0] if hyperlink_urls else ""
+
+
+def copy_to_clipboard(text: str, copy_cmd: str = "wl-copy") -> bool:
+    try:
+        subprocess.run([copy_cmd], input=(text + "\n").encode("utf-8"), check=True)
+        return True
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        return False
+
+
+def extract_youtube_url_from_daai_html(
+    html_text: str, news_id: str | None = None
+) -> str:
+    candidates = NEWS_JSON_RE.findall(html_text) or [html_text]
+    for candidate in candidates:
+        if news_id:
+            id_match = NEWS_ID_RE.search(candidate)
+            if not id_match or id_match.group(1) != news_id:
+                continue
+        youtube_match = YOUTUBE_ID_RE.search(candidate)
+        if youtube_match:
+            return f"https://www.youtube.com/watch?v={youtube_match.group(1)}"
+    return ""
+
+
+def resolve_youtube_url(source_url: str, timeout: float = 30.0) -> str:
+    hostname = (urllib.parse.urlparse(source_url).hostname or "").lower()
+    if hostname == "youtu.be" or hostname == "youtube.com" or hostname.endswith(
+        ".youtube.com"
+    ):
+        return source_url
+    if hostname != "daai.tv" and not hostname.endswith(".daai.tv"):
+        return ""
+
+    request = urllib.request.Request(source_url, headers={"User-Agent": "Mozilla/5.0"})
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            html_text = response.read().decode("utf-8", errors="replace")
+    except (OSError, urllib.error.URLError) as error:
+        raise RuntimeError(f"failed to load Da Ai page: {error}") from error
+
+    path_parts = urllib.parse.urlparse(source_url).path.rstrip("/").split("/")
+    news_id = path_parts[-1] if path_parts[-1].isdigit() else None
+    youtube_url = extract_youtube_url_from_daai_html(html_text, news_id=news_id)
+    if not youtube_url:
+        raise RuntimeError("Da Ai page does not contain a YouTube video ID")
+    return youtube_url
+
+
+def build_youtube_download_command(youtube_url: str, workspace: Path) -> list[str]:
+    return [
+        "yt-dlp",
+        "--no-playlist",
+        "--paths",
+        str(workspace),
+        youtube_url,
+    ]
+
+
+def download_youtube_video(youtube_url: str, workspace: Path) -> None:
+    if not shutil.which("yt-dlp"):
+        raise RuntimeError("required program not found in PATH: yt-dlp")
+    subprocess.run(build_youtube_download_command(youtube_url, workspace), check=True)
 
 
 def paragraph_text_with_tabs(para: ET.Element) -> str:
@@ -270,6 +383,7 @@ def main() -> int:
     for docx_path in docx_paths:
         try:
             lines = extract_ts_lines(docx_path, mode=args.mode)
+            first_url = find_first_docx_url(docx_path)
         except (zipfile.BadZipFile, KeyError, ET.ParseError) as exc:
             print(f"[skip] invalid docx: {docx_path} ({exc})")
             continue
@@ -289,6 +403,30 @@ def main() -> int:
             )
             out_path.write_text(content, encoding="utf-8")
             print(f"[wrote] {out_path} ({len(lines)} lines)")
+
+        if first_url:
+            try:
+                youtube_url = resolve_youtube_url(first_url)
+            except RuntimeError as error:
+                print(f"[error] {error}", file=sys.stderr)
+                return 1
+
+            clipboard_url = youtube_url or first_url
+            if copy_to_clipboard(clipboard_url):
+                print(f"[copied] {clipboard_url}")
+            else:
+                print(
+                    "[warn] URL found but failed to copy with wl-copy",
+                    file=sys.stderr,
+                )
+
+            if youtube_url:
+                try:
+                    download_youtube_video(youtube_url, docx_path.parent)
+                except (RuntimeError, subprocess.CalledProcessError) as error:
+                    print(f"[error] YouTube download failed: {error}", file=sys.stderr)
+                    return 1
+                print(f"[downloaded] {youtube_url}")
 
     return 0
 

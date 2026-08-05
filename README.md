@@ -10,7 +10,7 @@ Subtitle-related tooling in one place.
 - `convert-subs`: convert transcript BODY `.txt` files into `.srt` files.
 - `thumbnail_subs.py`: export the DOCX thumbnail image using the English YouTube title.
 - `gen_subs.sh`: generate `_al.docx` outputs from `.txt` + source `.docx`.
-- `setup_subs.py`: extract subtitle rows from docx and write sectioned `.txt` + raw `.baseline.txt`.
+- `setup_subs.py`: extract subtitle rows, write sectioned `.txt` + raw `.baseline.txt`, and download a linked YouTube video.
 - `crop_subs.py`: center-crop images to exact 16:9 in a directory.
 
 ## Usage
@@ -26,6 +26,10 @@ Prepare subtitle files from all docx in current directory (default `--mode auto`
 ```bash
 python3 /home/weiying/python/subs-tools/setup_subs.py . --force
 ```
+
+When a DOCX contains a YouTube or Da Ai video URL, setup copies the resolved URL
+with `wl-copy` and downloads the video beside the DOCX with `yt-dlp`, reporting
+`[copied]` and `[downloaded]` status lines like `setup-news`.
 
 Finalize generated subtitle DOCX files in current directory and run the subtitle analysis:
 
