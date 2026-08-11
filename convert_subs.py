@@ -17,9 +17,15 @@ TIMESTAMP_RE = re.compile(
 )
 
 
-def frame_timecode_to_srt(value: str, fps: int) -> str:
+def frame_timecode_to_srt(value: str, fps: int, offset_seconds: float = 0) -> str:
     hh, mm, ss, ff = map(int, value.split(":"))
-    total_ms = ((hh * 3600 + mm * 60 + ss) * 1000) + round(ff * 1000 / fps)
+    total_ms = (
+        ((hh * 3600 + mm * 60 + ss) * 1000)
+        + round(ff * 1000 / fps)
+        + round(offset_seconds * 1000)
+    )
+    if total_ms < 0:
+        raise ValueError(f"timestamp offset moves {value} before 00:00:00,000")
     hours = total_ms // 3_600_000
     total_ms %= 3_600_000
     minutes = total_ms // 60_000
@@ -43,7 +49,7 @@ def extract_body_lines(text: str) -> list[str]:
     return lines
 
 
-def build_srt(text: str, fps: int) -> str:
+def build_srt(text: str, fps: int, offset_seconds: float = 0) -> str:
     lines = extract_body_lines(text)
     cues: list[tuple[str, str, str]] = []
     i = 0
@@ -52,8 +58,8 @@ def build_srt(text: str, fps: int) -> str:
         if not match:
             i += 1
             continue
-        start = frame_timecode_to_srt(match.group("start"), fps)
-        end = frame_timecode_to_srt(match.group("end"), fps)
+        start = frame_timecode_to_srt(match.group("start"), fps, offset_seconds)
+        end = frame_timecode_to_srt(match.group("end"), fps, offset_seconds)
         english = lines[i + 1].strip() if i + 1 < len(lines) else ""
         if english.endswith(" #"):
             english = english[:-2].rstrip()
@@ -98,13 +104,23 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         default=DEFAULT_FPS,
         help=f"Frame rate used by the source timecodes. Default: {DEFAULT_FPS}",
     )
+    parser.add_argument(
+        "--offset-seconds",
+        type=float,
+        default=0,
+        help=(
+            "Shift every subtitle timestamp by this many seconds. "
+            "Use a positive value for subtitles that appear early and a negative value "
+            "for subtitles that appear late. Default: 0"
+        ),
+    )
     return parser.parse_args(argv)
 
 
-def convert_txt(path: Path, fps: int) -> Path:
+def convert_txt(path: Path, fps: int, offset_seconds: float = 0) -> Path:
     output = path.with_suffix(".srt")
     content = path.read_text(encoding="utf-8", errors="replace")
-    srt = build_srt(content, fps)
+    srt = build_srt(content, fps, offset_seconds)
     output.write_text(srt + "\n", encoding="utf-8")
     return output
 
@@ -129,7 +145,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"[skip] baseline file: {path}", file=sys.stderr)
             continue
 
-        output_path = convert_txt(path, args.fps)
+        output_path = convert_txt(path, args.fps, args.offset_seconds)
         print(f"[written] {output_path}")
 
     return exit_code

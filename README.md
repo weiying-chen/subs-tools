@@ -43,6 +43,15 @@ Convert all non-baseline transcript `.txt` files in the current directory to `.s
 /home/weiying/python/subs-tools/convert-subs
 ```
 
+Shift every generated subtitle 10 seconds later when the source timecodes are early:
+
+```bash
+/home/weiying/python/subs-tools/convert-subs --offset-seconds 10
+```
+
+`--offset-seconds` also accepts negative and decimal values. Existing `.srt` files are
+overwritten when the command runs.
+
 Export the first referenced DOCX image using the English part of the YouTube title:
 
 ```bash

@@ -88,6 +88,27 @@ class ConvertSubsTest(unittest.TestCase):
             ),
         )
 
+    def test_build_srt_applies_timestamp_offset_in_seconds(self) -> None:
+        text = "\n".join(
+            [
+                "BODY:",
+                "00:00:01:15\t00:00:03:00\t中文字幕",
+                "English subtitle",
+            ]
+        )
+
+        self.assertEqual(
+            convert_subs.build_srt(text, 30, offset_seconds=10),
+            "\n".join(
+                [
+                    "1",
+                    "00:00:11,500 --> 00:00:13,000",
+                    "English subtitle",
+                    "",
+                ]
+            ),
+        )
+
     def test_build_srt_keeps_timestamp_when_source_text_is_empty(self) -> None:
         text = "\n".join(
             [
