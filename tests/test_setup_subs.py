@@ -2,6 +2,7 @@ import importlib.util
 import sys
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 SETUP_MODULE_PATH = Path(__file__).resolve().parents[1] / "setup_subs.py"
@@ -52,6 +53,16 @@ class SetupSubsYoutubeTest(unittest.TestCase):
             setup_module.find_first_url_in_root(root),
             "https://youtu.be/tCL86SwAlFI",
         )
+
+    def test_tcmaster_page_is_downloaded_directly(self) -> None:
+        source_url = "https://tcmaster.daai.tv/2019/07/30/example/"
+
+        with mock.patch.object(setup_module.urllib.request, "urlopen") as urlopen:
+            self.assertEqual(
+                setup_module.resolve_youtube_url(source_url),
+                source_url,
+            )
+        urlopen.assert_not_called()
 
 
 if __name__ == "__main__":

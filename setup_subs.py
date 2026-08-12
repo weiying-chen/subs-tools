@@ -109,6 +109,8 @@ def resolve_youtube_url(source_url: str, timeout: float = 30.0) -> str:
         ".youtube.com"
     ):
         return source_url
+    if hostname == "tcmaster.daai.tv":
+        return source_url
     if hostname != "daai.tv" and not hostname.endswith(".daai.tv"):
         return ""
 
@@ -424,9 +426,11 @@ def main() -> int:
                 try:
                     download_youtube_video(youtube_url, docx_path.parent)
                 except (RuntimeError, subprocess.CalledProcessError) as error:
-                    print(f"[error] YouTube download failed: {error}", file=sys.stderr)
+                    print(f"[error] video download failed: {error}", file=sys.stderr)
                     return 1
                 print(f"[downloaded] {youtube_url}")
+            else:
+                print(f"[warn] no YouTube link found: {first_url}", file=sys.stderr)
 
     return 0
 
