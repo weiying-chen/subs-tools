@@ -1,7 +1,9 @@
 import importlib.util
 import sys
+import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 
@@ -63,6 +65,30 @@ class SetupSubsYoutubeTest(unittest.TestCase):
                 source_url,
             )
         urlopen.assert_not_called()
+
+    def test_duplicate_video_url_is_downloaded_once_per_run(self) -> None:
+        youtube_url = "https://www.youtube.com/watch?v=tCL86SwAlFI"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            docx_paths = [Path(tmpdir) / "one.docx", Path(tmpdir) / "two.docx"]
+            for path in docx_paths:
+                path.touch()
+
+            args = SimpleNamespace(paths=docx_paths, mode="auto", out="both", force=False)
+            with (
+                mock.patch.object(setup_module, "parse_args", return_value=args),
+                mock.patch.object(setup_module, "extract_ts_lines", return_value=[]),
+                mock.patch.object(
+                    setup_module, "find_first_docx_url", return_value=youtube_url
+                ),
+                mock.patch.object(
+                    setup_module, "resolve_youtube_url", return_value=youtube_url
+                ),
+                mock.patch.object(setup_module, "copy_to_clipboard", return_value=True),
+                mock.patch.object(setup_module, "download_youtube_video") as download,
+            ):
+                self.assertEqual(setup_module.main(), 0)
+
+        download.assert_called_once_with(youtube_url, docx_paths[0].parent)
 
 
 if __name__ == "__main__":

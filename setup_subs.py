@@ -382,6 +382,7 @@ def main() -> int:
         print("[error] no .docx files found")
         return 2
 
+    handled_video_urls: set[str] = set()
     for docx_path in docx_paths:
         try:
             lines = extract_ts_lines(docx_path, mode=args.mode)
@@ -414,6 +415,11 @@ def main() -> int:
                 return 1
 
             clipboard_url = youtube_url or first_url
+            if clipboard_url in handled_video_urls:
+                print(f"[skip] video URL already handled: {clipboard_url}")
+                continue
+            handled_video_urls.add(clipboard_url)
+
             if copy_to_clipboard(clipboard_url):
                 print(f"[copied] {clipboard_url}")
             else:
