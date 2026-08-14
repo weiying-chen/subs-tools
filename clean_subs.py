@@ -43,6 +43,7 @@ EDITOR_COLOR_LEGEND_TEXTS = (
     "太長讀不完",
     "不貼切或不通順",
     "參考資料沒貼好",
+    "參考資料沒參照好",
     "誤譯",
 )
 WORD_NAMESPACE = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
@@ -340,22 +341,25 @@ def _next_content_index(paragraphs, start: int) -> int | None:
 
 def _editor_color_legend_indexes(paragraphs) -> set[int]:
     remove_indexes: set[int] = set()
+    legend_entries = set(EDITOR_COLOR_LEGEND_TEXTS[1:])
     for idx, paragraph in enumerate(paragraphs):
         if paragraph.text.strip() != EDITOR_COLOR_LEGEND_TEXTS[0]:
             continue
 
         candidate_indexes = [idx]
         search_start = idx + 1
-        for expected in EDITOR_COLOR_LEGEND_TEXTS[1:]:
+        while True:
             next_idx = _next_content_index(paragraphs, search_start)
-            if next_idx is None or paragraphs[next_idx].text.strip() != expected:
+            if next_idx is None:
                 break
-            candidate_indexes.append(next_idx)
-            search_start = next_idx + 1
-        else:
-            next_idx = _next_content_index(paragraphs, search_start)
-            if next_idx is not None and paragraphs[next_idx].text.strip() in SUBTITLE_LABELS:
+            text = paragraphs[next_idx].text.strip()
+            if text in legend_entries:
+                candidate_indexes.append(next_idx)
+                search_start = next_idx + 1
+                continue
+            if text in SUBTITLE_LABELS and len(candidate_indexes) > 1:
                 remove_indexes.update(candidate_indexes)
+            break
     return remove_indexes
 
 

@@ -334,6 +334,30 @@ class CleanSubsCliTest(unittest.TestCase):
             self.assertNotIn("誤譯", texts)
             self.assertIn("字幕：", texts)
 
+    def test_remove_sources_strips_partial_editor_color_legend(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "input.docx"
+            output_path = Path(tmp_dir) / "output.docx"
+            doc = Document()
+            doc.add_paragraph("顏色的意義")
+            doc.add_paragraph("太長讀不完")
+            doc.add_paragraph("不貼切或不通順")
+            doc.add_paragraph("參考資料沒參照好")
+            doc.add_paragraph("")
+            doc.add_paragraph("字幕：")
+            doc.add_paragraph("00:00:01:00\t00:00:02:00\t中文")
+            doc.add_paragraph("English line.")
+            doc.save(input_path)
+
+            clean_subs.remove_sources_from_docx(input_path, output_path)
+
+            texts = [paragraph.text for paragraph in Document(output_path).paragraphs]
+            self.assertNotIn("顏色的意義", texts)
+            self.assertNotIn("太長讀不完", texts)
+            self.assertNotIn("不貼切或不通順", texts)
+            self.assertNotIn("參考資料沒參照好", texts)
+            self.assertIn("字幕：", texts)
+
     def test_repair_missing_use_local_dpi_namespace(self):
         broken_xml = (
             b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
