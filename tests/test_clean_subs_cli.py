@@ -342,7 +342,8 @@ class CleanSubsCliTest(unittest.TestCase):
             doc.add_paragraph("顏色的意義")
             doc.add_paragraph("太長讀不完")
             doc.add_paragraph("不貼切或不通順")
-            doc.add_paragraph("參考資料沒參照好")
+            doc.add_paragraph("太簡略或漏翻")
+            doc.add_paragraph("誤譯")
             doc.add_paragraph("")
             doc.add_paragraph("字幕：")
             doc.add_paragraph("00:00:01:00\t00:00:02:00\t中文")
@@ -355,7 +356,8 @@ class CleanSubsCliTest(unittest.TestCase):
             self.assertNotIn("顏色的意義", texts)
             self.assertNotIn("太長讀不完", texts)
             self.assertNotIn("不貼切或不通順", texts)
-            self.assertNotIn("參考資料沒參照好", texts)
+            self.assertNotIn("太簡略或漏翻", texts)
+            self.assertNotIn("誤譯", texts)
             self.assertIn("字幕：", texts)
 
     def test_repair_missing_use_local_dpi_namespace(self):

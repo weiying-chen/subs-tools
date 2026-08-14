@@ -38,14 +38,7 @@ STRAY_IMAGE_CREDIT_TEXTS = {
     "image created with chatgpt.",
     "image created with chatgpt",
 }
-EDITOR_COLOR_LEGEND_TEXTS = (
-    "顏色的意義",
-    "太長讀不完",
-    "不貼切或不通順",
-    "參考資料沒貼好",
-    "參考資料沒參照好",
-    "誤譯",
-)
+EDITOR_COLOR_LEGEND_HEADING = "顏色的意義"
 WORD_NAMESPACE = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 OFFICE_DRAWING_NAMESPACE = "http://schemas.microsoft.com/office/drawing/2010/main"
 INSERTION_TAGS = {f"{{{WORD_NAMESPACE}}}ins", f"{{{WORD_NAMESPACE}}}moveTo"}
@@ -341,9 +334,8 @@ def _next_content_index(paragraphs, start: int) -> int | None:
 
 def _editor_color_legend_indexes(paragraphs) -> set[int]:
     remove_indexes: set[int] = set()
-    legend_entries = set(EDITOR_COLOR_LEGEND_TEXTS[1:])
     for idx, paragraph in enumerate(paragraphs):
-        if paragraph.text.strip() != EDITOR_COLOR_LEGEND_TEXTS[0]:
+        if paragraph.text.strip() != EDITOR_COLOR_LEGEND_HEADING:
             continue
 
         candidate_indexes = [idx]
@@ -353,13 +345,13 @@ def _editor_color_legend_indexes(paragraphs) -> set[int]:
             if next_idx is None:
                 break
             text = paragraphs[next_idx].text.strip()
-            if text in legend_entries:
-                candidate_indexes.append(next_idx)
-                search_start = next_idx + 1
-                continue
-            if text in SUBTITLE_LABELS and len(candidate_indexes) > 1:
+            if text in SUBTITLE_LABELS:
                 remove_indexes.update(candidate_indexes)
-            break
+                break
+            if text in SECTION_LABELS:
+                break
+            candidate_indexes.append(next_idx)
+            search_start = next_idx + 1
     return remove_indexes
 
 
