@@ -24,20 +24,56 @@ setup_module = load_module("setup_subs", SETUP_MODULE_PATH)
 
 class SetupSubsYoutubeTest(unittest.TestCase):
     def test_youtube_download_command_targets_docx_directory(self) -> None:
-        command = setup_module.build_youtube_download_command(
-            "https://www.youtube.com/watch?v=tCL86SwAlFI",
-            Path("/work/subs"),
-        )
+        with mock.patch.object(
+            setup_module.Path,
+            "home",
+            return_value=Path("/home/tester"),
+        ):
+            command = setup_module.build_youtube_download_command(
+                "https://www.youtube.com/watch?v=tCL86SwAlFI",
+                Path("/work/subs"),
+            )
 
         self.assertEqual(
             command,
             [
                 "yt-dlp",
                 "--no-playlist",
+                "--js-runtimes",
+                "node",
+                "--extractor-args",
+                "youtubepot-bgutilscript:script_path=/home/tester/.local/share/bgutil-ytdlp-pot-provider/server/build/generate_once.js",
+                "--extractor-args",
+                "youtube:player_client=mweb",
                 "--paths",
                 "/work/subs",
                 "https://www.youtube.com/watch?v=tCL86SwAlFI",
             ],
+        )
+
+    def test_youtube_download_retries_with_combined_format(self) -> None:
+        failure = setup_module.subprocess.CalledProcessError(1, ["yt-dlp"])
+
+        with (
+            mock.patch.object(setup_module.shutil, "which", return_value="/usr/bin/yt-dlp"),
+            mock.patch.object(
+                setup_module.subprocess,
+                "run",
+                side_effect=[failure, mock.DEFAULT],
+            ) as run,
+        ):
+            setup_module.download_youtube_video(
+                "https://www.youtube.com/watch?v=tCL86SwAlFI",
+                Path("/work/subs"),
+            )
+
+        self.assertEqual(run.call_count, 2)
+        first_command = run.call_args_list[0].args[0]
+        fallback_command = run.call_args_list[1].args[0]
+        self.assertNotIn("--format", first_command)
+        self.assertEqual(
+            fallback_command[fallback_command.index("--format") + 1],
+            "18",
         )
 
     def test_first_url_is_found_in_docx_text(self) -> None:
