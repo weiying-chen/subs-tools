@@ -73,9 +73,9 @@ class ReviewSubsTest(unittest.TestCase):
 
         self.assertEqual(command[0], "mpv")
         self.assertIn("--sub-file=/story/episode.srt", command)
-        self.assertIn("--sub-font-size=64", command)
+        self.assertIn("--sub-font-size=48", command)
         self.assertIn("--sub-border-style=background-box", command)
-        self.assertIn("--sub-back-color=#80000000", command)
+        self.assertIn("--sub-back-color=#C0000000", command)
         self.assertIn("--chapters-file=/cache/chapters.ffmetadata", command)
         self.assertIn("--input-conf=/cache/input.conf", command)
         self.assertEqual(command[-1], "/story/episode.mp4")
