@@ -7,6 +7,7 @@ Subtitle-related tooling in one place.
 - `clean-subs`: clean source markings from DOCX files using the repo venv.
 - `rename-subs`: rename generated subtitle DOCX files from `_al_el`, `_al_sy`, or `_al_Shawn` to `_final`.
 - `finalize-subs`: clean subtitle DOCX files, export thumbnails, rename to `_final`, then run subtitle analysis once.
+- `review-subs`: play a matching video and SRT in Windows MPV with review styling.
 - `convert-subs`: convert transcript BODY `.txt` files into `.srt` files.
 - `thumbnail_subs.py`: export the DOCX thumbnail image using the English YouTube title.
 - `gen_subs.sh`: generate `_al.docx` outputs from `.txt` + source `.docx`.
@@ -41,6 +42,23 @@ Convert all non-baseline transcript `.txt` files in the current directory to `.s
 
 ```bash
 /home/weiying/python/subs-tools/convert-subs
+```
+
+Review the current directory's matching video and SRT in Windows MPV:
+
+```bash
+/home/weiying/python/subs-tools/review-subs
+```
+
+When a directory contains one video and multiple SRT files, `review-subs` merges
+their existing timeline timestamps into a cached, sorted SRT without changing the
+source files. Each source SRT becomes an MPV chapter at its first cue; use
+`Ctrl+Left` and `Ctrl+Right` to move between SRT sections.
+
+If multiple candidates exist, pass either the video or SRT explicitly:
+
+```bash
+/home/weiying/python/subs-tools/review-subs subtitles.srt
 ```
 
 Shift every generated subtitle 10 seconds later when the source timecodes are early:
