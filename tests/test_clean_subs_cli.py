@@ -274,6 +274,29 @@ class CleanSubsCliTest(unittest.TestCase):
                 )
             )
 
+    def test_remove_sources_preserves_vml_thumbnail(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "input.docx"
+            output_path = Path(tmp_dir) / "output.docx"
+            doc = Document()
+            doc.add_paragraph("選圖：")
+            doc.add_paragraph("3.")
+            image_paragraph = doc.add_paragraph()
+            image_run = image_paragraph.add_run()
+            image_run._r.append(OxmlElement("w:pict"))
+            doc.add_paragraph("字幕：")
+            doc.save(input_path)
+
+            clean_subs.remove_sources_from_docx(input_path, output_path)
+
+            paragraphs = Document(output_path).paragraphs
+            self.assertTrue(
+                any(
+                    paragraph._p.findall(".//w:pict", {"w": clean_subs.WORD_NAMESPACE})
+                    for paragraph in paragraphs
+                )
+            )
+
     def test_remove_sources_keeps_blank_before_thumbnail_label_after_source_removal(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
             input_path = Path(tmp_dir) / "input.docx"

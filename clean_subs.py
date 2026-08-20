@@ -292,10 +292,11 @@ def _is_timestamp_paragraph(paragraph) -> bool:
 
 
 def _paragraph_has_drawing(paragraph) -> bool:
-    return paragraph._p.find(
-        ".//w:drawing",
-        {"w": WORD_NAMESPACE},
-    ) is not None
+    namespaces = {"w": WORD_NAMESPACE}
+    return any(
+        paragraph._p.find(path, namespaces) is not None
+        for path in (".//w:drawing", ".//w:pict")
+    )
 
 
 def _paragraph_has_content(paragraph) -> bool:
