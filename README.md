@@ -8,6 +8,7 @@ Subtitle-related tooling in one place.
 - `rename-subs`: rename generated subtitle DOCX files from `_al_el`, `_al_sy`, or `_al_Shawn` to `_final`.
 - `finalize-subs`: clean subtitle DOCX files, export thumbnails, rename to `_final`, then run subtitle analysis once.
 - `review-subs`: play a matching video and SRT in Windows MPV with review styling.
+- `ref_subs.py`: build paired pre-edit/post-edit Markdown reference bundles from completed subtitle DOCX files.
 - `convert-subs`: convert transcript BODY `.txt` files into `.srt` files.
 - `thumbnail_subs.py`: export the DOCX thumbnail image using the English YouTube title.
 - `gen_subs.sh`: generate `_al.docx` outputs from `.txt` + source `.docx`.
@@ -60,6 +61,20 @@ If multiple candidates exist, pass either the video or SRT explicitly:
 ```bash
 /home/weiying/python/subs-tools/review-subs subtitles.srt
 ```
+
+Build a subtitle reference bundle from matched `output/*_al.docx` and
+`edited/*_final.docx` files:
+
+```bash
+python3 /home/weiying/python/subs-tools/ref_subs.py \
+  --series 大愛真健康
+```
+
+The generator automatically searches batch folders under `~/text/subs`, filters
+their matched pairs by the series name, selects the latest four globally (or
+three when only three are available), and normalizes both DOCX versions back to
+the standard TXT field structure. Use `--root` for a different subtitle project,
+or `--dry-run`/`--check` to avoid rewriting the reference.
 
 Shift every generated subtitle 10 seconds later when the source timecodes are early:
 
