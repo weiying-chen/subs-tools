@@ -57,6 +57,12 @@ class SetupSubsYoutubeTest(unittest.TestCase):
         with (
             mock.patch.object(setup_module.shutil, "which", return_value="/usr/bin/yt-dlp"),
             mock.patch.object(
+                setup_module.tempfile,
+                "mkdtemp",
+                return_value="/work/subs/.setup-subs-download-123",
+            ),
+            mock.patch.object(setup_module.shutil, "rmtree"),
+            mock.patch.object(
                 setup_module.subprocess,
                 "run",
                 side_effect=[failure, mock.DEFAULT],
@@ -71,9 +77,34 @@ class SetupSubsYoutubeTest(unittest.TestCase):
         first_command = run.call_args_list[0].args[0]
         fallback_command = run.call_args_list[1].args[0]
         self.assertNotIn("--format", first_command)
+        self.assertIn("temp:/work/subs/.setup-subs-download-123", first_command)
         self.assertEqual(
             fallback_command[fallback_command.index("--format") + 1],
             "18",
+        )
+
+    def test_youtube_download_cleans_private_temp_directory_after_failure(self) -> None:
+        failure = setup_module.subprocess.CalledProcessError(1, ["yt-dlp"])
+
+        with (
+            mock.patch.object(setup_module.shutil, "which", return_value="/usr/bin/yt-dlp"),
+            mock.patch.object(
+                setup_module.tempfile,
+                "mkdtemp",
+                return_value="/work/subs/.setup-subs-download-123",
+            ),
+            mock.patch.object(setup_module.subprocess, "run", side_effect=failure),
+            mock.patch.object(setup_module.shutil, "rmtree") as rmtree,
+        ):
+            with self.assertRaises(setup_module.subprocess.CalledProcessError):
+                setup_module.download_youtube_video(
+                    "https://www.youtube.com/watch?v=tCL86SwAlFI",
+                    Path("/work/subs"),
+                )
+
+        rmtree.assert_called_once_with(
+            Path("/work/subs/.setup-subs-download-123"),
+            ignore_errors=True,
         )
 
     def test_first_url_is_found_in_docx_text(self) -> None:
