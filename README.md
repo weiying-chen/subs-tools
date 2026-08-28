@@ -56,6 +56,9 @@ their existing timeline timestamps into a cached, sorted SRT without changing th
 source files. Each source SRT becomes an MPV chapter at its first cue; use
 `Ctrl+Left` and `Ctrl+Right` to move between SRT sections.
 
+Before discovery, `review-subs` converts each non-baseline TXT file whose matching
+SRT file is missing. Existing SRT files are left unchanged.
+
 If multiple candidates exist, pass either the video or SRT explicitly:
 
 ```bash

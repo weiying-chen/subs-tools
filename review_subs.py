@@ -11,6 +11,8 @@ import sys
 from pathlib import Path
 from typing import Sequence
 
+import convert_subs
+
 
 VIDEO_SUFFIXES = {".m4v", ".mkv", ".mov", ".mp4", ".webm"}
 TIMESTAMP_RE = re.compile(
@@ -31,6 +33,23 @@ def media_files(directory: Path) -> tuple[list[Path], list[Path]]:
         if path.is_file() and path.suffix.lower() == ".srt"
     )
     return videos, subtitles
+
+
+def prepare_subtitle_files(directory: Path) -> list[Path]:
+    generated: list[Path] = []
+    sources = sorted(
+        path
+        for path in directory.iterdir()
+        if path.is_file()
+        and path.suffix.lower() == ".txt"
+        and not path.name.endswith(".baseline.txt")
+    )
+    for source in sources:
+        output = source.with_suffix(".srt")
+        if output.is_file():
+            continue
+        generated.append(convert_subs.convert_txt(source, convert_subs.DEFAULT_FPS))
+    return generated
 
 
 def unique_match(candidates: list[Path], stem: str) -> Path | None:
@@ -317,6 +336,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = create_parser().parse_args(argv)
     try:
         directory = Path.cwd()
+        generated_subtitles = prepare_subtitle_files(directory)
+        for path in generated_subtitles:
+            print(f"[converted] {path.name}")
         video, subtitles = discover_media(directory, args.media)
         subtitle, chapters, input_config = prepare_player_files(subtitles, directory)
         print(f"[video] {video.name}")

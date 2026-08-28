@@ -21,6 +21,37 @@ review_module = load_module("review_subs", MODULE_PATH)
 
 
 class ReviewSubsTest(unittest.TestCase):
+    def test_prepares_only_missing_srt_files_from_matching_txt_files(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            directory = Path(tmpdir)
+            missing_source = directory / "episode-one.txt"
+            missing_source.write_text(
+                "BODY:\n"
+                "00:00:01:00\t00:00:02:00\t中文\n"
+                "English line.\n",
+                encoding="utf-8",
+            )
+            existing_source = directory / "episode-two.txt"
+            existing_source.write_text("BODY:\n", encoding="utf-8")
+            existing_subtitle = directory / "episode-two.srt"
+            existing_subtitle.write_text("manually edited\n", encoding="utf-8")
+            (directory / "episode-one.baseline.txt").write_text(
+                "BODY:\n", encoding="utf-8"
+            )
+
+            generated = review_module.prepare_subtitle_files(directory)
+
+            self.assertEqual(generated, [directory / "episode-one.srt"])
+            self.assertIn(
+                "00:00:01,000 --> 00:00:02,000",
+                generated[0].read_text(encoding="utf-8"),
+            )
+            self.assertEqual(
+                existing_subtitle.read_text(encoding="utf-8"),
+                "manually edited\n",
+            )
+            self.assertFalse((directory / "episode-one.baseline.srt").exists())
+
     def test_matching_stem_is_preferred_among_multiple_videos(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             directory = Path(tmpdir)
