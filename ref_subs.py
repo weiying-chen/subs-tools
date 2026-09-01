@@ -60,6 +60,24 @@ def discover_pairs(
     return sorted(pairs, key=lambda pair: pair.key)
 
 
+def discover_batches(
+    sources: list[Path], series: str | None = None
+) -> list[tuple[Path, list[Pair]]]:
+    """Return one batch per folder, retaining every matched file in it."""
+    batches: list[tuple[Path, list[Pair]]] = []
+    for source in sources:
+        pairs = discover_source_pairs(source, series)
+        expected = {
+            normalized_stem(path, "_al")
+            for path in (source / "output").glob("*_al.docx")
+            if not path.name.startswith("~$")
+            and (series is None or series in normalized_stem(path, "_al"))
+        }
+        if pairs and expected == {pair.key for pair in pairs}:
+            batches.append((source, pairs))
+    return batches
+
+
 def discover_source_pairs(source: Path, series: str | None = None) -> list[Pair]:
     output = source / "output"
     edited = source / "edited"
@@ -85,8 +103,17 @@ def pair_date(pair: Pair) -> tuple[int, str]:
     return (int(match.group(1)) if match else 0, pair.key)
 
 
-def latest_pairs(pairs: list[Pair], limit: int = 4, fallback: int = 3) -> list[Pair]:
-    ordered = sorted(pairs, key=pair_date)
+def source_order(source: Path) -> tuple[str, int, str]:
+    match = re.fullmatch(r"([^0-9]*)([0-9]+)", source.name)
+    if match:
+        return (match.group(1), int(match.group(2)), source.name)
+    return (source.name, 0, source.name)
+
+
+def latest_batches(
+    batches: list[tuple[Path, list[Pair]]], limit: int = 4, fallback: int = 3
+) -> list[tuple[Path, list[Pair]]]:
+    ordered = sorted(batches, key=lambda batch: source_order(batch[0]))
     count = limit if len(ordered) >= limit else min(fallback, len(ordered))
     return ordered[-count:]
 
@@ -162,30 +189,30 @@ def docx_to_txt(path: Path) -> str:
     return "\n".join(rendered).rstrip() + "\n"
 
 
-def render_bundle(series: str, pairs: list[Pair]) -> str:
+def render_bundle(series: str, batches: list[tuple[Path, list[Pair]]]) -> str:
     lines = [
-        f"# {series} — Latest {len(pairs)}",
+        f"# {series} — Latest {len(batches)}",
         "",
-        f"最近 {len(pairs)} 個已完成的{series}項目。每一項依序收錄 `output/` 的 pre-edit "
-        "與 `edited/` 的 post-edit，內容均保留標準 TXT 欄位格式。",
+        f"最近 {len(batches)} 個已完成的{series}資料夾。每個資料夾內的所有配對檔案，"
+        "均依序收錄 `output/` 的 pre-edit 與 `edited/` 的 post-edit，內容保留標準 TXT 欄位格式。",
     ]
-    for pair in pairs:
-        lines.extend(
-            [
-                "",
-                "---",
-                "",
-                f"# {pair.key}",
-                "",
-                "### Pre-edit (`output/`)",
-                "",
-                docx_to_txt(pair.pre).rstrip(),
-                "",
-                "### Post-edit (`edited/`)",
-                "",
-                docx_to_txt(pair.post).rstrip(),
-            ]
-        )
+    for source, pairs in batches:
+        lines.extend(["", "---", "", f"# {source.name}"])
+        for pair in pairs:
+            lines.extend(
+                [
+                    "",
+                    f"## {pair.key}",
+                    "",
+                    "### Pre-edit (`output/`)",
+                    "",
+                    docx_to_txt(pair.pre).rstrip(),
+                    "",
+                    "### Post-edit (`edited/`)",
+                    "",
+                    docx_to_txt(pair.post).rstrip(),
+                ]
+            )
     return "\n".join(lines).rstrip() + "\n"
 
 
@@ -202,12 +229,12 @@ def main() -> int:
         print(f"[error] subtitle root not found: {root}", file=sys.stderr)
         return 2
     sources = discover_sources(root)
-    pairs = latest_pairs(discover_pairs(sources, series=args.series))
-    if len(pairs) < 3:
-        print(f"[error] expected at least 3 complete pairs, found {len(pairs)}", file=sys.stderr)
+    batches = latest_batches(discover_batches(sources, series=args.series))
+    if len(batches) < 3:
+        print(f"[error] expected at least 3 complete folders, found {len(batches)}", file=sys.stderr)
         return 1
-    output = root / "refs" / args.series / f"latest-{len(pairs)}.md"
-    content = render_bundle(args.series, pairs)
+    output = root / "refs" / args.series / f"latest-{len(batches)}.md"
+    content = render_bundle(args.series, batches)
     changed = not output.exists() or output.read_text(encoding="utf-8") != content
     if args.check:
         if changed:

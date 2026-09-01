@@ -69,13 +69,23 @@ class RefSubsTest(unittest.TestCase):
             self.assertIn("THUMBNAIL: English Title.png", rendered)
             self.assertIn("BODY:\n\n00:00:01:00\t00:00:02:00\t中文\nEnglish subtitle.", rendered)
 
-    def test_latest_four_falls_back_to_three_complete_pairs(self) -> None:
-        pairs = [
-            ref_module.Pair(str(index), Path(f"pre-{index}"), Path(f"post-{index}"))
-            for index in range(3)
+    def test_latest_four_selects_folders_and_keeps_every_pair(self) -> None:
+        batches = [
+            (Path(f"ev{index}"), [
+                ref_module.Pair(
+                    f"episode {index} [{part}]",
+                    Path(f"pre-{index}-{part}"),
+                    Path(f"post-{index}-{part}"),
+                )
+                for part in range(1, index + 1)
+            ])
+            for index in range(1, 6)
         ]
 
-        self.assertEqual(ref_module.latest_pairs(pairs), pairs)
+        selected = ref_module.latest_batches(batches)
+
+        self.assertEqual([folder.name for folder, _ in selected], ["ev2", "ev3", "ev4", "ev5"])
+        self.assertEqual([len(pairs) for _, pairs in selected], [2, 3, 4, 5])
 
     def test_pairs_are_collected_and_filtered_across_multiple_folders(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -108,6 +118,17 @@ class RefSubsTest(unittest.TestCase):
             (root / "incomplete" / "output").mkdir(parents=True)
 
             self.assertEqual(ref_module.discover_sources(root), valid)
+
+    def test_partially_edited_folder_is_not_a_complete_batch(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            source = Path(tmpdir) / "ev30"
+            (source / "output").mkdir(parents=True)
+            (source / "edited").mkdir()
+            for index in range(1, 3):
+                (source / "output" / f"人文講堂 episode [{index}]_al.docx").touch()
+            (source / "edited" / "人文講堂 episode [1]_final.docx").touch()
+
+            self.assertEqual(ref_module.discover_batches([source], "人文講堂"), [])
 
 
 if __name__ == "__main__":

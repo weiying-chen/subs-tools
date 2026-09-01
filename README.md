@@ -74,9 +74,10 @@ python3 /home/weiying/python/subs-tools/ref_subs.py \
 ```
 
 The generator automatically searches batch folders under `~/text/subs`, filters
-their matched pairs by the series name, selects the latest four globally (or
-three when only three are available), and normalizes both DOCX versions back to
-the standard TXT field structure. Use `--root` for a different subtitle project,
+their matched pairs by the series name, selects the latest four complete folders
+(or three when only three are available), and includes every matched file within
+each selected folder. It normalizes both DOCX versions back to the standard TXT
+field structure. Use `--root` for a different subtitle project,
 or `--dry-run`/`--check` to avoid rewriting the reference.
 
 Shift every generated subtitle 10 seconds later when the source timecodes are early:
