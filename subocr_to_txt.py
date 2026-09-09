@@ -6,6 +6,7 @@ import re
 import sys
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
+from difflib import SequenceMatcher
 from pathlib import Path
 from zipfile import ZipFile
 
@@ -336,6 +337,9 @@ def align_source_to_cues(
     issues: list[str] = []
     for cue_index, source_start, size, score in items:
         assigned = source_lines[source_start : source_start + size]
+        check_dropped_ocr_phrases(
+            cues[cue_index].text, "".join(assigned), cues[cue_index].start + time_offset
+        )
         missing = unsupported_source_lines(cues[cue_index].text, assigned)
         if missing is not None:
             first, last = missing
@@ -367,6 +371,39 @@ def align_source_to_cues(
             "No output files were written."
         )
     return texts, notes
+
+
+def check_dropped_ocr_phrases(ocr_text: str, proposed: str, start: float) -> None:
+    """Require review for deleted phrases, while allowing character substitutions.
+
+    Ignore known OCR noise and formatting. Two or more deleted letters/digits
+    (including Chinese characters) can be a phrase excluded by a source section
+    boundary or a stale correction. Do not assume that the source is complete.
+    """
+    original = normalize_for_match(clean_text(ocr_text, taiwan_variants=True))
+    revised = normalize_for_match(clean_text(proposed, taiwan_variants=True))
+    # Anchor matching edges before diffing so repeated characters do not shift
+    # the reported deletion away from the phrase actually removed.
+    prefix = 0
+    while prefix < min(len(original), len(revised)) and original[prefix] == revised[prefix]:
+        prefix += 1
+    original, revised = original[prefix:], revised[prefix:]
+    while original and revised and original[-1] == revised[-1]:
+        original, revised = original[:-1], revised[:-1]
+    removed = [
+        original[first:last]
+        for tag, first, last, _, _ in SequenceMatcher(
+            None, original, revised, autojunk=False
+        ).get_opcodes()
+        if tag == "delete" and sum(c.isalnum() for c in original[first:last]) >= 2
+    ]
+    if removed:
+        raise ValueError(
+            f"Possible dropped OCR phrase at {format_time(start)}: {' / '.join(removed)!r}. "
+            "Check the saved frame, source section boundary, and corrections TSV; "
+            "restore the phrase to the source/correction or fix erroneous OCR in the SRT. "
+            "No output files were written."
+        )
 
 
 def unsupported_source_lines(ocr_text: str, assigned: list[str]) -> tuple[int, int] | None:
@@ -442,6 +479,11 @@ def main() -> int:
         end_time = format_time(cue.end + offset)
         text = corrections.get(start_time, text)
         clean = clean_text(text, taiwan_variants=args.taiwan_variants)
+        try:
+            check_dropped_ocr_phrases(cue.text, clean, cue.start + offset)
+        except ValueError as error:
+            print(f"error: {error}", file=sys.stderr)
+            return 1
         if output_lines:
             output_lines.extend(layout_prefixes.get(start_time, []))
         output_lines.append(f"{start_time}\t{end_time}\t{clean}")

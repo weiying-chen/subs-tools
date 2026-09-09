@@ -35,6 +35,40 @@ class AlignmentTests(unittest.TestCase):
         cues = [Cue(0, 1, source[0]), Cue(1, 2, source[1]), Cue(2, 4, source[2])]
         self.assertEqual(self.align(cues, source), source)
 
+    def test_source_slice_cannot_drop_ocr_prefix_even_with_number_correction(self):
+        with self.assertRaisesRegex(ValueError, '接著我們'):
+            self.align([Cue(0, 2, '接著我們在十八歲出發')], ['在18歲出發'])
+
+    def test_source_cannot_drop_ocr_suffix_or_middle_phrase(self):
+        for ocr in ('大家一起出發然後回家', '大家然後回家一起出發'):
+            with self.subTest(ocr=ocr), self.assertRaisesRegex(ValueError, '然後回家'):
+                self.align([Cue(0, 2, ocr)], ['大家一起出發'])
+
+    def test_punctuation_and_known_ocr_noise_can_be_cleaned(self):
+        self.assertEqual(self.align([Cue(0, 2, '，大家一起出發SPIRIT')],
+                                    ['大家一起出發']), ['大家一起出發'])
+
+    def test_cli_rejects_stale_correction_without_touching_translations(self):
+        script = Path(__file__).resolve().parents[1] / 'subocr_to_txt.py'
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            srt = root / 'in.srt'
+            srt.write_text('1\n00:00:00,000 --> 00:00:02,000\n接著我們一起出發\n', encoding='utf-8')
+            corrections = root / 'corrections.tsv'
+            corrections.write_text('00:01:00:00\t一起出發\n', encoding='utf-8')
+            baseline, translated = root / 'out.baseline.txt', root / 'out.txt'
+            baseline.write_bytes(b'original baseline\n')
+            translated.write_bytes(b'Existing translation\n')
+            result = subprocess.run([sys.executable, str(script), '--srt', str(srt),
+                                     '--offset', '00:01:00', '--corrections', str(corrections),
+                                     '--out-baseline', str(baseline)], capture_output=True, text=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('接著我們', result.stderr)
+            self.assertIn('00:01:00:00', result.stderr)
+            self.assertNotIn('Traceback', result.stderr)
+            self.assertEqual(baseline.read_bytes(), b'original baseline\n')
+            self.assertEqual(translated.read_bytes(), b'Existing translation\n')
+
     def test_cli_reports_absolute_gap_and_preserves_existing_outputs(self):
         script = Path(__file__).resolve().parents[1] / 'subocr_to_txt.py'
         with tempfile.TemporaryDirectory() as tmp:

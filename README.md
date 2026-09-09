@@ -172,6 +172,13 @@ source text and any adjacent timing gap (including the clip offset). Check the
 saved frames and restore the missing cue in the input SRT before rerunning.
 This check catches exact matches after normalization; it does not detect every
 OCR omission or infer timing from a gap alone.
+The converter also stops if source alignment or a corrections TSV deletes a
+phrase of two or more letters/digits (including Chinese characters) from the OCR
+text. This catches phrases stranded outside DOCX section markers and stale
+corrections. Check the frame and restore the source phrase (or correct erroneous
+OCR in the SRT). Punctuation and known OCR noise are ignored. These checks are
+review triggers, not a guarantee that every replacement or single-character
+omission will be detected.
 
 Extraction mode options:
 
