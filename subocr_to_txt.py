@@ -33,7 +33,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
             "Convert SubOCR SRT output to timed baseline TXT. "
-            "OCR cues remain the authority for timestamps and row grouping."
+            "OCR cues set timing; identical touching cues merge after text correction."
         )
     )
     parser.add_argument("--srt", required=True, type=Path, help="SubOCR .srt output")
@@ -81,7 +81,7 @@ def parse_args() -> argparse.Namespace:
         help=(
             "Optional UTF-8 TSV corrections. Use either start<TAB>text or "
             "start<TAB>end<TAB>text. Corrections are applied after alignment "
-            "and never change timestamps or row count."
+            "before identical touching cues are merged, retaining their outer timestamps."
         ),
     )
     parser.add_argument(
@@ -437,6 +437,31 @@ def format_time(seconds: float, *, fps: int = 30) -> str:
     return f"{hours:02d}:{minutes:02d}:{secs:02d}:{frame:02d}"
 
 
+def merge_duplicate_cues(
+    cues: list[Cue], *, preserve_starts: set[float] | None = None
+) -> list[Cue]:
+    """Coalesce exact corrected duplicates only across touching time boundaries.
+
+    OCR background noise can split one displayed subtitle into several cues.
+    Once corrected, those cues share identical text. Do not use fuzzy matching
+    here, bridge gaps/overlaps, or remove boundaries carrying saved annotations.
+    """
+    boundaries = preserve_starts or set()
+    merged: list[Cue] = []
+    for cue in cues:
+        if (
+            merged
+            and cue.text
+            and cue.text == merged[-1].text
+            and abs(cue.start - merged[-1].end) <= 1e-6
+            and cue.start not in boundaries
+        ):
+            merged[-1] = Cue(merged[-1].start, cue.end, merged[-1].text)
+        else:
+            merged.append(cue)
+    return merged
+
+
 def default_txt_path(path: Path) -> Path:
     name = path.name
     if name.endswith(".baseline.txt"):
@@ -473,10 +498,9 @@ def main() -> int:
 
     corrections = read_corrections(args.corrections)
     layout_prefixes = read_layout_prefixes(args.blank_lines_from)
-    output_lines = []
+    corrected_cues: list[Cue] = []
     for cue, text in zip(cues, texts, strict=True):
         start_time = format_time(cue.start + offset)
-        end_time = format_time(cue.end + offset)
         text = corrections.get(start_time, text)
         clean = clean_text(text, taiwan_variants=args.taiwan_variants)
         try:
@@ -484,9 +508,20 @@ def main() -> int:
         except ValueError as error:
             print(f"error: {error}", file=sys.stderr)
             return 1
+        corrected_cues.append(Cue(cue.start, cue.end, clean))
+
+    preserve_starts = {
+        cue.start for cue in corrected_cues
+        if layout_prefixes.get(format_time(cue.start + offset))
+    }
+    merged_cues = merge_duplicate_cues(corrected_cues, preserve_starts=preserve_starts)
+    output_lines = []
+    for cue in merged_cues:
+        start_time = format_time(cue.start + offset)
+        end_time = format_time(cue.end + offset)
         if output_lines:
             output_lines.extend(layout_prefixes.get(start_time, []))
-        output_lines.append(f"{start_time}\t{end_time}\t{clean}")
+        output_lines.append(f"{start_time}\t{end_time}\t{cue.text}")
 
     args.out_baseline.parent.mkdir(parents=True, exist_ok=True)
     content = "\n".join(output_lines) + "\n"
@@ -502,7 +537,10 @@ def main() -> int:
         ]
         args.notes.write_text("\n".join(note_lines) + ("\n" if note_lines else ""), encoding="utf-8")
 
-    print(f"wrote {len(cues)} OCR-grouped rows")
+    print(
+        f"wrote {len(merged_cues)} rows from {len(corrected_cues)} OCR cues; "
+        f"merged {len(corrected_cues) - len(merged_cues)} adjacent duplicate cues"
+    )
     print(args.out_baseline)
     print(out_txt)
     return 0

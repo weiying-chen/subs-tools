@@ -47,7 +47,7 @@ file with work in progress by generating into temporary output paths.
 - `setup_subs.py`: extract subtitle rows, write sectioned `.txt` + raw `.baseline.txt`, and download a linked YouTube video.
 - `crop_subs.py`: center-crop images to exact 16:9 in a directory.
 - `subocr-to-txt`: convert SubOCR SRT output into `.baseline.txt` and `.txt`,
-  preserving OCR timing/row grouping while optionally applying clean source text.
+  applying clean source text and merging identical touching cues after correction.
 
 ## Usage
 
@@ -165,6 +165,15 @@ Convert SubOCR output into the timed TXT/baseline files:
   --taiwan-variants \
   --out-baseline "/path/to/output [2].baseline.txt"
 ```
+
+After source alignment, correction overrides, and text cleanup, identical
+adjacent cues whose timestamps touch are merged into one cue, using the first
+start and last end. This removes duplicate rows caused by background text in
+OCR. Text must match exactly (including spaces and punctuation); gaps, overlaps,
+and intervening different subtitles remain separate. Boundaries with saved
+layout lines from `--blank-lines-from` are also retained so notes are not lost.
+Both output files use the merged rows, and the command reports the merge count.
+Alignment note cue numbers still refer to the original input SRT.
 
 When source alignment finds whole source lines absent from an otherwise matching
 OCR cue, conversion stops before writing either output. The error identifies the
