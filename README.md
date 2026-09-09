@@ -2,6 +2,38 @@
 
 Subtitle-related tooling in one place.
 
+## OCR spacing review
+
+`subocr_spacing.py` builds a local HTML review and an AI-readable `review.json`
+from a timed baseline and SubOCR's saved images. Requires Pillow. It suggests
+spaces using image gaps; background interference and uncertain glyph alignment
+are flagged. Every row remains available for visual review, including rows with
+no suggestion. Suggestions are heuristic and must be checked against the images.
+
+```bash
+python3 ~/python/subs-tools/subocr_spacing.py build \
+  --raw /path/to/block.ocr_raw.jsonl \
+  --baseline /path/to/block.baseline.txt \
+  --offset 00:07:51 --out /path/to/spacing-review
+```
+
+Open `review.html`, adjust suggestions, approve checked rows, and download the
+reviewed JSON. An AI can instead inspect the image paths in `review.json`, edit
+`suggested`, and set `approved: true` for visually verified rows.
+
+```bash
+python3 ~/python/subs-tools/subocr_spacing.py export \
+  --review /path/to/reviewed.json \
+  --base-corrections /path/to/block.baseline.txt \
+  --out /path/to/spacing.corrections.tsv
+```
+
+Export rejects approved changes to characters or line structure. The optional
+base file preserves existing Chinese corrections; approved spacing takes priority.
+Pass the exported TSV to `subocr-to-txt --corrections` on the next generation.
+Review generation and export do not edit subtitle files. Preserve a translation
+file with work in progress by generating into temporary output paths.
+
 ## Scripts
 
 - `clean-subs`: clean source markings from DOCX files using the repo venv.
