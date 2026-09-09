@@ -279,6 +279,7 @@ def align_source_to_cues(
     source_lines: list[str],
     *,
     max_source_lines_per_cue: int,
+    time_offset: float = 0.0,
 ) -> tuple[list[str], list[tuple[int, float, int, int]]]:
     if fuzz is None:
         raise RuntimeError("rapidfuzz is required when --source is used")
@@ -332,10 +333,59 @@ def align_source_to_cues(
 
     texts: list[str] = []
     notes: list[tuple[int, float, int, int]] = []
+    issues: list[str] = []
     for cue_index, source_start, size, score in items:
-        texts.append("".join(source_lines[source_start : source_start + size]))
+        assigned = source_lines[source_start : source_start + size]
+        missing = unsupported_source_lines(cues[cue_index].text, assigned)
+        if missing is not None:
+            first, last = missing
+            cue = cues[cue_index]
+            detail = (
+                f"cue {cue_index + 1} at {format_time(cue.start + time_offset)}: "
+                f"source lines {source_start + first + 1}-{source_start + last} "
+                f"are absent from OCR: {' / '.join(assigned[first:last])!r}"
+            )
+            # Gaps are review locations, not inferred subtitle timings.
+            if first == 0 and cue_index > 0 and cues[cue_index - 1].end < cue.start:
+                detail += (
+                    f"; preceding gap {format_time(cues[cue_index - 1].end + time_offset)}"
+                    f"–{format_time(cue.start + time_offset)}"
+                )
+            if last == size and cue_index + 1 < len(cues) and cue.end < cues[cue_index + 1].start:
+                detail += (
+                    f"; following gap {format_time(cue.end + time_offset)}"
+                    f"–{format_time(cues[cue_index + 1].start + time_offset)}"
+                )
+            issues.append(detail)
+        texts.append("".join(assigned))
         notes.append((cue_index + 1, score, source_start + 1, source_start + size))
+    if issues:
+        raise ValueError(
+            "Possible missing OCR segment(s); refusing to merge unsupported source text.\n"
+            + "\n".join(issues)
+            + "\nCheck the saved frames and correct the input SRT before rerunning. "
+            "No output files were written."
+        )
     return texts, notes
+
+
+def unsupported_source_lines(ocr_text: str, assigned: list[str]) -> tuple[int, int] | None:
+    """Detect whole extra lines when the remaining source exactly matches OCR.
+
+    Normalization permits punctuation and common variant differences. This is
+    deliberately conservative: ordinary character corrections and fully
+    supported multi-line groups remain valid. A suspected omission requires
+    frame review because OCR text alone cannot establish a new cue's timing.
+    """
+    expected = normalize_for_match(ocr_text)
+    parts = [normalize_for_match(line) for line in assigned]
+    if not expected or "".join(parts) == expected:
+        return None
+    for first in range(len(parts)):
+        for last in range(first + 1, len(parts) + 1):
+            if "".join(parts[first:last]) and "".join(parts[:first] + parts[last:]) == expected:
+                return first, last
+    return None
 
 
 def format_time(seconds: float, *, fps: int = 30) -> str:
@@ -370,11 +420,16 @@ def main() -> int:
             end_marker=args.end_marker,
             end_text=args.end_text,
         )
-        texts, notes = align_source_to_cues(
-            cues,
-            source_lines,
-            max_source_lines_per_cue=args.max_source_lines_per_cue,
-        )
+        try:
+            texts, notes = align_source_to_cues(
+                cues,
+                source_lines,
+                max_source_lines_per_cue=args.max_source_lines_per_cue,
+                time_offset=offset,
+            )
+        except ValueError as error:
+            print(f"error: {error}", file=sys.stderr)
+            return 1
         cues = cues[: len(texts)]
     else:
         texts = [cue.text for cue in cues]

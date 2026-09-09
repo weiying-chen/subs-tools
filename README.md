@@ -166,6 +166,13 @@ Convert SubOCR output into the timed TXT/baseline files:
   --out-baseline "/path/to/output [2].baseline.txt"
 ```
 
+When source alignment finds whole source lines absent from an otherwise matching
+OCR cue, conversion stops before writing either output. The error identifies the
+source text and any adjacent timing gap (including the clip offset). Check the
+saved frames and restore the missing cue in the input SRT before rerunning.
+This check catches exact matches after normalization; it does not detect every
+OCR omission or infer timing from a gap alone.
+
 Extraction mode options:
 
 - `--mode auto` (default): use yellow-highlighted extraction first, then fall back to full-paragraph line parsing if none found.
