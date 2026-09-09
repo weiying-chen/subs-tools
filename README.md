@@ -14,6 +14,8 @@ Subtitle-related tooling in one place.
 - `gen_subs.sh`: generate `_al.docx` outputs from `.txt` + source `.docx`.
 - `setup_subs.py`: extract subtitle rows, write sectioned `.txt` + raw `.baseline.txt`, and download a linked YouTube video.
 - `crop_subs.py`: center-crop images to exact 16:9 in a directory.
+- `subocr-to-txt`: convert SubOCR SRT output into `.baseline.txt` and `.txt`,
+  preserving OCR timing/row grouping while optionally applying clean source text.
 
 ## Usage
 
@@ -117,6 +119,19 @@ Crop and overwrite originals:
 
 ```bash
 python3 /home/weiying/python/subs-tools/crop_subs.py . --overwrite
+```
+
+Convert SubOCR output into the timed TXT/baseline files:
+
+```bash
+/home/weiying/python/subs-tools/subocr-to-txt \
+  --srt work/ev31/ocr/block2/ev31_block2_0751-1325.srt \
+  --offset 00:07:51 \
+  --source "/path/to/source.docx" \
+  --start-marker "(2)07:51-13:25" \
+  --end-text "帶著孩子們一步一步地去證明他們自己" \
+  --taiwan-variants \
+  --out-baseline "/path/to/output [2].baseline.txt"
 ```
 
 Extraction mode options:
