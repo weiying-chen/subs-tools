@@ -337,10 +337,11 @@ def align_source_to_cues(
     issues: list[str] = []
     for cue_index, source_start, size, score in items:
         assigned = source_lines[source_start : source_start + size]
-        check_dropped_ocr_phrases(
-            cues[cue_index].text, "".join(assigned), cues[cue_index].start + time_offset
-        )
         missing = unsupported_source_lines(cues[cue_index].text, assigned)
+        if missing is None:
+            check_ocr_text_changes(
+                cues[cue_index].text, "".join(assigned), cues[cue_index].start + time_offset
+            )
         if missing is not None:
             first, last = missing
             cue = cues[cue_index]
@@ -373,12 +374,12 @@ def align_source_to_cues(
     return texts, notes
 
 
-def check_dropped_ocr_phrases(ocr_text: str, proposed: str, start: float) -> None:
-    """Require review for deleted phrases, while allowing character substitutions.
+def check_ocr_text_changes(ocr_text: str, proposed: str, start: float) -> None:
+    """Flag inserted/deleted characters, allowing equal-length glyph corrections.
 
-    Ignore known OCR noise and formatting. Two or more deleted letters/digits
-    (including Chinese characters) can be a phrase excluded by a source section
-    boundary or a stale correction. Do not assume that the source is complete.
+    Formatting and known OCR noise are normalized first. Even a single added
+    particle requires frame review; unequal-length replacements are ambiguous
+    and also require review. This is not a semantic check of substitutions.
     """
     original = normalize_for_match(clean_text(ocr_text, taiwan_variants=True))
     revised = normalize_for_match(clean_text(proposed, taiwan_variants=True))
@@ -390,19 +391,26 @@ def check_dropped_ocr_phrases(ocr_text: str, proposed: str, start: float) -> Non
     original, revised = original[prefix:], revised[prefix:]
     while original and revised and original[-1] == revised[-1]:
         original, revised = original[:-1], revised[:-1]
-    removed = [
-        original[first:last]
-        for tag, first, last, _, _ in SequenceMatcher(
-            None, original, revised, autojunk=False
-        ).get_opcodes()
-        if tag == "delete" and sum(c.isalnum() for c in original[first:last]) >= 2
-    ]
-    if removed:
+    changes: list[str] = []
+    for tag, first, last, new_first, new_last in SequenceMatcher(
+        None, original, revised, autojunk=False
+    ).get_opcodes():
+        old, new = original[first:last], revised[new_first:new_last]
+        old_count = sum(c.isalnum() for c in old)
+        new_count = sum(c.isalnum() for c in new)
+        if tag == "insert" and new_count:
+            changes.append(f"added {new!r}")
+        elif tag == "delete" and old_count:
+            changes.append(f"removed {old!r}")
+        elif tag == "replace" and old_count != new_count:
+            changes.append(f"changed length: {old!r} -> {new!r}")
+    if changes:
         raise ValueError(
-            f"Possible dropped OCR phrase at {format_time(start)}: {' / '.join(removed)!r}. "
-            "Check the saved frame, source section boundary, and corrections TSV; "
-            "restore the phrase to the source/correction or fix erroneous OCR in the SRT. "
-            "No output files were written."
+            f"OCR character changes require frame review at {format_time(start)}: "
+            + "; ".join(changes)
+            + ". Check the saved frame, source section boundary, and corrections TSV; "
+            "make source/corrections match the visible subtitle, or restore OCR omissions "
+            "in the input SRT after checking the frame. No output files were written."
         )
 
 
@@ -504,7 +512,7 @@ def main() -> int:
         text = corrections.get(start_time, text)
         clean = clean_text(text, taiwan_variants=args.taiwan_variants)
         try:
-            check_dropped_ocr_phrases(cue.text, clean, cue.start + offset)
+            check_ocr_text_changes(cue.text, clean, cue.start + offset)
         except ValueError as error:
             print(f"error: {error}", file=sys.stderr)
             return 1

@@ -181,13 +181,15 @@ source text and any adjacent timing gap (including the clip offset). Check the
 saved frames and restore the missing cue in the input SRT before rerunning.
 This check catches exact matches after normalization; it does not detect every
 OCR omission or infer timing from a gap alone.
-The converter also stops if source alignment or a corrections TSV deletes a
-phrase of two or more letters/digits (including Chinese characters) from the OCR
-text. This catches phrases stranded outside DOCX section markers and stale
-corrections. Check the frame and restore the source phrase (or correct erroneous
-OCR in the SRT). Punctuation and known OCR noise are ignored. These checks are
-review triggers, not a guarantee that every replacement or single-character
-omission will be detected.
+The converter also stops if source alignment or a corrections TSV inserts or
+deletes even one letter/digit (including Chinese characters), or replaces text
+with a different character count. For example, a DOCX-only final `耶` must be
+checked against the saved frame before it can enter the output. Equal-length
+character corrections, spaces, punctuation, and known OCR noise cleanup remain
+allowed. Check flagged changes against the visible subtitle and correct the
+source/TSV or restore verified OCR omissions in the input SRT before rerunning.
+This is a structural check, not a guarantee that equal-length substitutions
+are correct. Both output files remain untouched when the check fails.
 
 Extraction mode options:
 
