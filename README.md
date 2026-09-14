@@ -2,6 +2,16 @@
 
 Subtitle-related tooling in one place.
 
+## Python dependencies
+
+The command wrappers use the shared `~/python/word/.venv` environment. Install
+the subtitle-tool dependencies into it with:
+
+```bash
+/home/weiying/python/word/.venv/bin/python -m pip install \
+  -r /home/weiying/python/subs-tools/requirements.txt
+```
+
 ## OCR spacing review
 
 `subocr_spacing.py` builds a local HTML review and an AI-readable `review.json`
