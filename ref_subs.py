@@ -15,6 +15,7 @@ from thumbnail_subs import english_youtube_title, sanitize_filename
 
 
 DEFAULT_ROOT = Path.home() / "text" / "subs"
+DEFAULT_LATEST_BATCH_COUNT = 4
 W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 W = f"{{{W_NS}}}"
 DATE_RE = re.compile(r"(?<!\d)(20\d{6})(?!\d)")
@@ -111,11 +112,11 @@ def source_order(source: Path) -> tuple[str, int, str]:
 
 
 def latest_batches(
-    batches: list[tuple[Path, list[Pair]]], limit: int = 4, fallback: int = 3
+    batches: list[tuple[Path, list[Pair]]],
+    limit: int = DEFAULT_LATEST_BATCH_COUNT,
 ) -> list[tuple[Path, list[Pair]]]:
     ordered = sorted(batches, key=lambda batch: source_order(batch[0]))
-    count = limit if len(ordered) >= limit else min(fallback, len(ordered))
-    return ordered[-count:]
+    return ordered[-limit:]
 
 
 def docx_paragraphs(path: Path) -> list[str]:
@@ -216,24 +217,39 @@ def render_bundle(series: str, batches: list[tuple[Path, list[Pair]]]) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
-def main() -> int:
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--series", required=True, help="series name used for the reference folder and heading")
     parser.add_argument("--root", type=Path, default=DEFAULT_ROOT, help=f"subtitle root (default: {DEFAULT_ROOT})")
+    parser.add_argument(
+        "--latest",
+        type=int,
+        default=DEFAULT_LATEST_BATCH_COUNT,
+        help=f"maximum number of latest batches to include (default: {DEFAULT_LATEST_BATCH_COUNT})",
+    )
     parser.add_argument("--check", action="store_true", help="report a stale reference without rewriting it")
     parser.add_argument("--dry-run", action="store_true", help="show the target without rewriting it")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
+    if args.latest < 1:
+        parser.error("--latest must be at least 1")
+    return args
+
+
+def main() -> int:
+    args = parse_args()
 
     root = args.root.expanduser().resolve()
     if not root.is_dir():
         print(f"[error] subtitle root not found: {root}", file=sys.stderr)
         return 2
     sources = discover_sources(root)
-    batches = latest_batches(discover_batches(sources, series=args.series))
-    if len(batches) < 3:
-        print(f"[error] expected at least 3 complete folders, found {len(batches)}", file=sys.stderr)
+    batches = latest_batches(
+        discover_batches(sources, series=args.series), limit=args.latest
+    )
+    if not batches:
+        print("[error] no complete folders found", file=sys.stderr)
         return 1
-    output = root / "refs" / args.series / f"latest-{len(batches)}.md"
+    output = root / "refs" / args.series / f"latest-{args.latest}.md"
     content = render_bundle(args.series, batches)
     changed = not output.exists() or output.read_text(encoding="utf-8") != content
     if args.check:

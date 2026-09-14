@@ -42,6 +42,13 @@ def write_subtitle_docx(path: Path, title: str, english: str) -> None:
 
 
 class RefSubsTest(unittest.TestCase):
+    def test_latest_argument_defaults_to_four_and_accepts_override(self) -> None:
+        self.assertEqual(ref_module.parse_args(["--series", "人文講堂"]).latest, 4)
+        self.assertEqual(
+            ref_module.parse_args(["--series", "人文講堂", "--latest", "6"]).latest,
+            6,
+        )
+
     def test_complete_output_and_edited_pairs_are_discovered(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             source = Path(tmpdir)
@@ -86,6 +93,15 @@ class RefSubsTest(unittest.TestCase):
 
         self.assertEqual([folder.name for folder, _ in selected], ["ev2", "ev3", "ev4", "ev5"])
         self.assertEqual([len(pairs) for _, pairs in selected], [2, 3, 4, 5])
+
+    def test_latest_override_uses_all_available_when_fewer_exist(self) -> None:
+        batches = [(Path(f"ev{index}"), []) for index in range(1, 6)]
+
+        selected = ref_module.latest_batches(batches, limit=6)
+
+        self.assertEqual([folder.name for folder, _ in selected], [
+            "ev1", "ev2", "ev3", "ev4", "ev5"
+        ])
 
     def test_pairs_are_collected_and_filtered_across_multiple_folders(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
