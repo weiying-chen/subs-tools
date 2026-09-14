@@ -108,10 +108,11 @@ python3 /home/weiying/python/subs-tools/ref_subs.py \
 ```
 
 The generator automatically searches batch folders under `~/text/subs`, filters
-their matched pairs by the series name, selects the latest four complete folders
+their matched pairs by the series name, selects the latest six complete folders
 (or every available folder when fewer exist), and includes every matched file
 within each selected folder. Pass `--latest N` to choose another maximum; the
-default is 4. It normalizes both DOCX versions back to the standard TXT field
+default is 6, and the filename uses the number actually selected. It normalizes
+both DOCX versions back to the standard TXT field
 structure. Use `--root` for a different subtitle project,
 or `--dry-run`/`--check` to avoid rewriting the reference.
 

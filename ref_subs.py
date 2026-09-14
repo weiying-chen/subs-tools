@@ -15,7 +15,7 @@ from thumbnail_subs import english_youtube_title, sanitize_filename
 
 
 DEFAULT_ROOT = Path.home() / "text" / "subs"
-DEFAULT_LATEST_BATCH_COUNT = 4
+DEFAULT_LATEST_BATCH_COUNT = 6
 W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 W = f"{{{W_NS}}}"
 DATE_RE = re.compile(r"(?<!\d)(20\d{6})(?!\d)")
@@ -249,7 +249,7 @@ def main() -> int:
     if not batches:
         print("[error] no complete folders found", file=sys.stderr)
         return 1
-    output = root / "refs" / args.series / f"latest-{args.latest}.md"
+    output = root / "refs" / args.series / f"latest-{len(batches)}.md"
     content = render_bundle(args.series, batches)
     changed = not output.exists() or output.read_text(encoding="utf-8") != content
     if args.check:

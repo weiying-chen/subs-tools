@@ -42,11 +42,11 @@ def write_subtitle_docx(path: Path, title: str, english: str) -> None:
 
 
 class RefSubsTest(unittest.TestCase):
-    def test_latest_argument_defaults_to_four_and_accepts_override(self) -> None:
-        self.assertEqual(ref_module.parse_args(["--series", "人文講堂"]).latest, 4)
+    def test_latest_argument_defaults_to_six_and_accepts_override(self) -> None:
+        self.assertEqual(ref_module.parse_args(["--series", "人文講堂"]).latest, 6)
         self.assertEqual(
-            ref_module.parse_args(["--series", "人文講堂", "--latest", "6"]).latest,
-            6,
+            ref_module.parse_args(["--series", "人文講堂", "--latest", "4"]).latest,
+            4,
         )
 
     def test_complete_output_and_edited_pairs_are_discovered(self) -> None:
@@ -89,7 +89,7 @@ class RefSubsTest(unittest.TestCase):
             for index in range(1, 6)
         ]
 
-        selected = ref_module.latest_batches(batches)
+        selected = ref_module.latest_batches(batches, limit=4)
 
         self.assertEqual([folder.name for folder, _ in selected], ["ev2", "ev3", "ev4", "ev5"])
         self.assertEqual([len(pairs) for _, pairs in selected], [2, 3, 4, 5])
