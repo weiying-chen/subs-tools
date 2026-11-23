@@ -324,6 +324,32 @@ class CleanSubsCliTest(unittest.TestCase):
                 ],
             )
 
+    def test_remove_sources_keeps_blank_after_range_heading_in_subtitles(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "input.docx"
+            output_path = Path(tmp_dir) / "output.docx"
+            doc = Document()
+            doc.add_paragraph("字幕：")
+            doc.add_paragraph("07:56-09:40 (1分44秒) 小腿滾一滾 肩頸腰背都放鬆")
+            doc.add_paragraph("")
+            doc.add_paragraph(
+                "00:07:56:22\t00:08:00:12\t再來我們也可以使用按摩小腿"
+            )
+            doc.save(input_path)
+
+            clean_subs.remove_sources_from_docx(input_path, output_path)
+
+            texts = [paragraph.text for paragraph in Document(output_path).paragraphs]
+            self.assertEqual(
+                texts,
+                [
+                    "字幕：",
+                    "07:56-09:40 (1分44秒) 小腿滾一滾 肩頸腰背都放鬆",
+                    "",
+                    "00:07:56:22\t00:08:00:12\t再來我們也可以使用按摩小腿",
+                ],
+            )
+
     def test_remove_sources_strips_editor_color_legend_before_subtitles(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp_path = Path(tmp_dir)

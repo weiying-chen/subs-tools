@@ -18,6 +18,10 @@ INDENT_THRESHOLD_PT = 21.0
 TIMESTAMP_LINE_RE = re.compile(
     r"^(?:[^\t]+\t)?\d{2}:\d{2}:\d{2}:\d{2}\t\d{2}:\d{2}:\d{2}:\d{2}\t"
 )
+RANGE_HEADING_RE = re.compile(
+    r"^\d{1,2}:\d{2}(?::\d{2})?\s*[-–—]\s*"
+    r"\d{1,2}:\d{2}(?::\d{2})?(?:\s|$)"
+)
 IMAGE_NUMBER_RE = re.compile(r"^\d+[.]?$")
 SECTION_LABELS = {
     "建議YT標題：",
@@ -289,6 +293,10 @@ def _is_indented_content_paragraph(paragraph) -> bool:
 
 def _is_timestamp_paragraph(paragraph) -> bool:
     return bool(TIMESTAMP_LINE_RE.match(paragraph.text.strip()))
+
+
+def _is_range_heading_paragraph(paragraph) -> bool:
+    return bool(RANGE_HEADING_RE.match(paragraph.text.strip()))
 
 
 def _paragraph_has_drawing(paragraph) -> bool:
@@ -642,6 +650,8 @@ def remove_sources_from_docx(input_path: Path, output_path: Path) -> None:
         if prev_non_blank is None or next_non_blank is None:
             continue
         if prev_non_blank.text.strip() in SUBTITLE_LABELS:
+            continue
+        if _is_range_heading_paragraph(prev_non_blank):
             continue
         subtitle_blank_indexes.append(idx)
 
