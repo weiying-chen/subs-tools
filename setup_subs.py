@@ -135,6 +135,9 @@ def build_youtube_download_command(
     workspace: Path,
     format_selector: str | None = None,
     temp_directory: Path | None = None,
+    cookies_path: Path | None = None,
+    player_clients: str = "mweb,tv,web_safari",
+    use_token_provider: bool = True,
 ) -> list[str]:
     token_script = (
         Path.home()
@@ -145,11 +148,22 @@ def build_youtube_download_command(
         "--no-playlist",
         "--js-runtimes",
         "node",
-        "--extractor-args",
-        f"youtubepot-bgutilscript:script_path={token_script}",
-        "--extractor-args",
-        "youtube:player_client=mweb",
     ]
+    if use_token_provider:
+        command.extend(
+            [
+                "--extractor-args",
+                f"youtubepot-bgutilscript:script_path={token_script}",
+            ]
+        )
+    command.extend(
+        [
+            "--extractor-args",
+            f"youtube:player_client={player_clients};player_js_variant=tv",
+        ]
+    )
+    if cookies_path is not None:
+        command.extend(["--cookies", str(cookies_path)])
     if format_selector:
         command.extend(["--format", format_selector])
     command.extend(["--paths", str(workspace)])
@@ -165,6 +179,8 @@ def download_youtube_video(youtube_url: str, workspace: Path) -> None:
     temp_directory = Path(
         tempfile.mkdtemp(prefix=".setup-subs-download-", dir=workspace)
     )
+    configured_cookies = Path.home() / ".config/yt-dlp/youtube-cookies.txt"
+    cookies_path = configured_cookies if configured_cookies.is_file() else None
     try:
         try:
             subprocess.run(
@@ -172,6 +188,7 @@ def download_youtube_video(youtube_url: str, workspace: Path) -> None:
                     youtube_url,
                     workspace,
                     temp_directory=temp_directory,
+                    cookies_path=cookies_path,
                 ),
                 check=True,
             )
@@ -183,6 +200,7 @@ def download_youtube_video(youtube_url: str, workspace: Path) -> None:
                     workspace,
                     format_selector="18",
                     temp_directory=temp_directory,
+                    cookies_path=cookies_path,
                 ),
                 check=True,
             )

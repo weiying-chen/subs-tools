@@ -44,7 +44,7 @@ class SetupSubsYoutubeTest(unittest.TestCase):
                 "--extractor-args",
                 "youtubepot-bgutilscript:script_path=/home/tester/.local/share/bgutil-ytdlp-pot-provider/server/build/generate_once.js",
                 "--extractor-args",
-                "youtube:player_client=mweb",
+                "youtube:player_client=mweb,tv,web_safari;player_js_variant=tv",
                 "--paths",
                 "/work/subs",
                 "https://www.youtube.com/watch?v=tCL86SwAlFI",
@@ -81,6 +81,26 @@ class SetupSubsYoutubeTest(unittest.TestCase):
         self.assertEqual(
             fallback_command[fallback_command.index("--format") + 1],
             "18",
+        )
+        self.assertIn(
+            "youtube:player_client=mweb,tv,web_safari;player_js_variant=tv",
+            fallback_command,
+        )
+        self.assertTrue(
+            any("youtubepot-bgutilscript" in argument for argument in fallback_command)
+        )
+
+    def test_youtube_download_command_uses_exported_cookies(self) -> None:
+        command = setup_module.build_youtube_download_command(
+            "https://www.youtube.com/watch?v=tCL86SwAlFI",
+            Path("/work/subs"),
+            cookies_path=Path("/home/tester/.config/yt-dlp/youtube-cookies.txt"),
+        )
+
+        self.assertIn("--cookies", command)
+        self.assertEqual(
+            command[command.index("--cookies") + 1],
+            "/home/tester/.config/yt-dlp/youtube-cookies.txt",
         )
 
     def test_youtube_download_cleans_private_temp_directory_after_failure(self) -> None:
